@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plainpad Preferences</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body class="settings-window">
+  <!-- Top Tab Navigation Bar -->
+  <header class="settings-header">
+    <nav class="settings-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="general" role="tab" aria-selected="true" title="General">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>General</span>
+      </button>
+
+      <button class="tab-btn" data-tab="appearance" role="tab" aria-selected="false" title="Appearance">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.2 0-.9.8-1.7 1.7-1.7h2c3.9 0 7-3.1 7-7 0-5.5-4.5-9.3-11.6-9.3z"/>
+        </svg>
+        <span>Appearance</span>
+      </button>
+
+      <button class="tab-btn" data-tab="editor" role="tab" aria-selected="false" title="Editor">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 7 4 4 20 4 20 7"/>
+          <line x1="9" y1="20" x2="15" y2="20"/>
+          <line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>
+        <span>Editor</span>
+      </button>
+
+      <button class="tab-btn" data-tab="keywords" role="tab" aria-selected="false" title="Keywords & Math">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 4V2"/>
+          <path d="M15 16v-2"/>
+          <path d="M8 9h2"/>
+          <path d="M20 9h2"/>
+          <path d="M17.8 11.8L19 13"/>
+          <path d="M15 9h0"/>
+          <path d="M17.8 6.2L19 5"/>
+          <path d="M3 21l9-9"/>
+          <path d="M12.2 6.2L11 5"/>
+        </svg>
+        <span>Keywords</span>
+      </button>
+
+      <button class="tab-btn" data-tab="shortcuts" role="tab" aria-selected="false" title="Shortcuts">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M6 12h.001M10 12h.001M14 12h.001M18 12h.001M7 16h10"/>
+        </svg>
+        <span>Shortcuts</span>
+      </button>
+
+      <button class="tab-btn" data-tab="timer" role="tab" aria-selected="false" title="Timer">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="13" r="8"/>
+          <path d="M12 9v4l2 2"/>
+          <path d="M12 2v3"/>
+          <path d="M19 6l-1.5 1.5"/>
+        </svg>
+        <span>Timer</span>
+      </button>
+
+      <button class="tab-btn" data-tab="currency" data-pill="rates" role="tab" aria-selected="false" title="Currency & Rates">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"/>
+          <path d="M12 6v2m0 8v2"/>
+        </svg>
+        <span>Currency</span>
+      </button>
+
+      <button class="tab-btn" data-tab="storage" role="tab" aria-selected="false" title="Notes & Storage">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+        </svg>
+        <span>Storage</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Settings Content Area -->
+  <main class="settings-body">
+    <!-- TAB 1: GENERAL -->
+    <section id="panel-general" class="tab-panel active" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Startup</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Launch Plainpad at login</span>
+            <span class="setting-desc">Start Plainpad automatically in the background when your computer boots</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-autostart" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Start with a new note</span>
+            <span class="setting-desc">Always create a fresh blank note when launching Plainpad</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-start-new-note" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Taskbar & System Tray</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Show Plainpad in</span>
+            <span class="setting-desc">Control where Plainpad remains accessible</span>
+          </div>
+          <select id="setting-tray-mode" class="select-control">
+            <option value="both">Taskbar & System Tray</option>
+            <option value="tray_only">System Tray Only</option>
+            <option value="taskbar_only">Taskbar Only</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Window Behavior</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Hide Plainpad when it loses focus</span>
+            <span class="setting-desc">Applies only while the window is unpinned. Quick-scratchpad dismiss.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-hide-on-blur" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Restore pin state on open</span>
+            <span class="setting-desc">Remember whether "Always on Top" was active across restarts</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-restore-pin" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Navigation</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Swipe between notes</span>
+            <span class="setting-desc">Swipe horizontally on your trackpad or scroll wheel to move to previous or next note</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-swipe-nav" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Swipe sensitivity</span>
+            <span class="setting-desc">Higher values require more deliberate horizontal swipe motions</span>
+          </div>
+          <div class="slider-control">
+            <input type="range" id="setting-swipe-sensitivity" min="20" max="150" step="5" value="60" />
+            <span id="swipe-sensitivity-val" class="slider-badge">60</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: APPEARANCE -->
+    <section id="panel-appearance" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Theme</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">App Theme</span>
+            <span class="setting-desc">Select your preferred color scheme</span>
+          </div>
+          <select id="setting-theme" class="select-control">
+            <option value="system">Follow System</option>
+            <option value="dark">Monochrome Dark</option>
+            <option value="oled">OLED Pure Black</option>
+            <option value="slate">Deep Slate</option>
+            <option value="light">Monochrome Light</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Typography</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Font Family</span>
+            <span class="setting-desc">Editor and interface monospace font</span>
+          </div>
+          <select id="setting-font-family" class="select-control">
+            <option value="jetbrains">JetBrains Mono</option>
+            <option value="cascadia">Cascadia Code</option>
+            <option value="fira">Fira Code</option>
+            <option value="inter">Inter (Sans-serif)</option>
+            <option value="monospace">System Monospace</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Font Size</span>
+            <span class="setting-desc">Size of text in the scratchpad</span>
+          </div>
+          <div class="slider-control">
+            <input type="range" id="setting-font-size" min="12" max="22" step="1" value="14" />
+            <span id="font-size-val" class="slider-badge">14px</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Line Spacing</span>
+            <span class="setting-desc">Vertical spacing between lines</span>
+          </div>
+          <div class="slider-control">
+            <input type="range" id="setting-line-height" min="1.3" max="2.2" step="0.1" value="1.6" />
+            <span id="line-height-val" class="slider-badge">1.6</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Minimalism & Contrast</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Annotation Dimming</span>
+            <span class="setting-desc">Dim math results and keyword chips to keep your writing distraction-free</span>
+          </div>
+          <div class="slider-control">
+            <input type="range" id="setting-dimming" min="40" max="100" step="5" value="75" />
+            <span id="dimming-val" class="slider-badge">75%</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Window Opacity</span>
+            <span class="setting-desc">Scratchpad backdrop transparency</span>
+          </div>
+          <div class="slider-control">
+            <input type="range" id="setting-window-opacity" min="70" max="100" step="5" value="95" />
+            <span id="window-opacity-val" class="slider-badge">95%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: EDITOR -->
+    <section id="panel-editor" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Modes & Behavior</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Default to Plain Mode</span>
+            <span class="setting-desc">New notes start as pure scratchpads without automatic evaluation</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-default-plain" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Global Plain Mode</span>
+            <span class="setting-desc">Disable intelligence system-wide across all notes</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-global-plain" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Tab Indent Width</span>
+            <span class="setting-desc">Indentation inserted when pressing Tab</span>
+          </div>
+          <select id="setting-tab-width" class="select-control">
+            <option value="2">2 spaces</option>
+            <option value="4">4 spaces</option>
+            <option value="tab">Tab character</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Auto-close brackets & quotes</span>
+            <span class="setting-desc">Automatically insert matching ), ], }, &quot;, and '</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-auto-brackets" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Checkboxes in Lists</span>
+            <span class="setting-desc">Render interactive monochrome checkboxes for [ ] and - items</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-list-checkboxes" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: KEYWORDS & MATH -->
+    <section id="panel-keywords" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Intelligent Detection Words</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Detect 'math' and 'calc' lines</span>
+            <span class="setting-desc">Evaluate math expressions and natural language calculations</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-detect-math" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Detect 'timer' and 'remind' lines</span>
+            <span class="setting-desc">Parse timer countdowns like 'timer 10m pizza' or 'remind in 1h'</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-detect-timer" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Detect 'list' and 'todo' blocks</span>
+            <span class="setting-desc">Format list blocks with count summaries and progress tracking</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-detect-list" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Detect 'code' blocks</span>
+            <span class="setting-desc">Syntax highlight code blocks when starting with 'code'</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-detect-code" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Calculation & Formats</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Default Currency Symbol ($)</span>
+            <span class="setting-desc">Interpret bare $ symbol as USD, CAD, AUD, or NZD</span>
+          </div>
+          <select id="setting-default-currency" class="select-control">
+            <option value="USD">USD ($)</option>
+            <option value="CAD">CAD ($)</option>
+            <option value="AUD">AUD ($)</option>
+            <option value="GBP">GBP (£)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="INR">INR (₹)</option>
+            <option value="JPY">JPY (¥)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Number Formatting</span>
+            <span class="setting-desc">Thousands separator style in results</span>
+          </div>
+          <select id="setting-number-format" class="select-control">
+            <option value="comma">1,234,567.89 (Standard)</option>
+            <option value="period">1.234.567,89 (European)</option>
+            <option value="space">1 234 567.89 (Space)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Calculation Precision</span>
+            <span class="setting-desc">Decimal precision for calculation results</span>
+          </div>
+          <select id="setting-calc-precision" class="select-control">
+            <option value="auto">Auto (Trim trailing zeros)</option>
+            <option value="2">2 decimal places</option>
+            <option value="4">4 decimal places</option>
+            <option value="raw">Raw floating point</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: SHORTCUTS -->
+    <section id="panel-shortcuts" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Global Hotkey</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Summon Plainpad</span>
+            <span class="setting-desc">Summon or hide Plainpad instantly from any application</span>
+          </div>
+          <div class="hotkey-badge">Alt + A</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Editor Shortcuts</h3>
+        <div class="shortcut-list">
+          <div class="shortcut-item">
+            <span class="shortcut-label">Create new note</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>N</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Next note</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>→</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Previous note</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>←</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Toggle Plain mode</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>P</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Delete note to trash</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Export note to clipboard</span>
+            <span class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Accept math / conversion chip</span>
+            <span class="shortcut-keys"><kbd>Tab</kbd></span>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Dismiss / Hide scratchpad</span>
+            <span class="shortcut-keys"><kbd>Esc</kbd></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: TIMER -->
+    <section id="panel-timer" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Timer Defaults</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Default duration for bare numbers</span>
+            <span class="setting-desc">When typing 'timer 5' or 'timer tea', default duration in minutes</span>
+          </div>
+          <select id="setting-default-timer-duration" class="select-control">
+            <option value="1">1 minute</option>
+            <option value="3">3 minutes</option>
+            <option value="5" selected>5 minutes</option>
+            <option value="10">10 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="25">25 minutes (Pomodoro)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Desktop notification on completion</span>
+            <span class="setting-desc">Deliver a native system notification when countdown finishes</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-timer-notification" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Audio alert chime</span>
+            <span class="setting-desc">Play a subtle audio notification tone when time is up</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-timer-sound" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Auto-hide timer pill when idle</span>
+            <span class="setting-desc">Only show the floating countdown chip when a timer is currently active</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-timer-autohide" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: CURRENCY & RATES -->
+    <section id="panel-currency" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Exchange Rates Engine</h3>
+        <div class="rates-hero-card">
+          <div class="rates-hero-meta">
+            <div class="rates-hero-heading">
+              <span id="rates-count-badge" class="rates-badge">169 Currencies</span>
+              <span id="rates-status-pill" class="rates-pill">Live Synced</span>
+            </div>
+            <p id="rates-last-updated" class="rates-updated-info">Checking exchange rates status...</p>
+          </div>
+          <button id="btn-refresh-rates" class="action-btn">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 2v4h4M15 14v-4h-4"/>
+              <path d="M2.5 10a6 6 0 0 0 9.8 2.2L15 10M13.5 6a6 6 0 0 0-9.8-2.2L1 6"/>
+            </svg>
+            <span>Update Now</span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Auto-update rates daily</span>
+            <span class="setting-desc">Silently refresh rates from exchange APIs once every 24 hours</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-rates-autoupdate" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Include Cryptocurrencies</span>
+            <span class="setting-desc">Track real-time conversion rates for Bitcoin (BTC), Ethereum (ETH), and Solana (SOL)</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-include-crypto" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: STORAGE & NOTES -->
+    <section id="panel-storage" class="tab-panel" role="tabpanel">
+      <div class="settings-section">
+        <h3 class="section-title">Notes Directory</h3>
+        <div class="storage-card">
+          <div class="storage-meta">
+            <span class="storage-label">Plainpad Data Folder</span>
+            <code id="storage-path-display" class="storage-path">Loading path...</code>
+          </div>
+          <button id="btn-open-data-dir" class="action-btn">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 3h4l1.5 2H14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+            </svg>
+            <span>Open in Explorer</span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Default Export Format</span>
+            <span class="setting-desc">Format used when copying or saving exported notes</span>
+          </div>
+          <select id="setting-export-format" class="select-control">
+            <option value="markdown">Markdown (.md)</option>
+            <option value="txt">Plain Text (.txt)</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Trash Retention Period</span>
+            <span class="setting-desc">Automatically purge notes in trash after specified days</span>
+          </div>
+          <select id="setting-trash-retention" class="select-control">
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30" selected>30 days (Default)</option>
+            <option value="never">Never auto-delete</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Empty Trash</span>
+            <span class="setting-desc">Permanently purge all trashed notes immediately</span>
+          </div>
+          <button id="btn-empty-trash" class="action-btn danger">
+            <span>Empty Trash</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">About Plainpad</h3>
+        <div class="about-card">
+          <div class="about-heading">
+            <span class="about-name">Plainpad</span>
+            <span class="about-version">v0.1.0</span>
+          </div>
+          <p class="about-sub">The distraction-free scratchpad where you just write, and the app works out the rest.</p>
+          <div class="about-footer">
+            <span>Built with Rust & Tauri 2</span>
+            <span>Local-first & Private</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

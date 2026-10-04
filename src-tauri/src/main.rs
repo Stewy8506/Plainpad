@@ -12,6 +12,7 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, WebviewWindowBuilder,
 };
+use tauri_plugin_autostart::ManagerExt;
 
 struct AppState {
     store: plainpad_core::store::FileStore,
@@ -160,9 +161,86 @@ fn get_settings(state: tauri::State<'_, Mutex<AppState>>) -> serde_json::Value {
 fn set_setting(
     key: String,
     value: serde_json::Value,
+    app: AppHandle,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    state.lock().unwrap().store.set_setting(&key, value).map_err(|e| e.to_string())
+    state.lock().unwrap().store.set_setting(&key, value.clone()).map_err(|e| e.to_string())?;
+    let _ = app.emit("setting-changed", serde_json::json!({ "key": key, "value": value }));
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let win = WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("settings.html".into()))
+        .title("Plainpad Preferences")
+        .inner_size(680.0, 560.0)
+        .min_inner_size(620.0, 480.0)
+        .resizable(true)
+        .decorations(true)
+        .center()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let _ = win.show();
+    let _ = win.set_focus();
+    Ok(())
+}
+
+#[tauri::command]
+fn get_data_dir_path() -> String {
+    data_dir().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+fn open_data_dir() -> Result<String, String> {
+    let p = data_dir();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer").arg(&p).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&p).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(&p).spawn();
+    }
+    Ok(p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn empty_trash_now(state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
+    let s = state.lock().unwrap();
+    let trash_list = s.store.list_trash();
+    for item in trash_list {
+        let trash_file = s.store.root().join("trash").join(format!("{}.txt", item.id));
+        let _ = std::fs::remove_file(trash_file);
+    }
+    let trash_meta = s.store.root().join("state/trash.json");
+    let _ = std::fs::write(trash_meta, "[]");
+    Ok(())
+}
+
+#[tauri::command]
+fn is_autostart_enabled(app: AppHandle) -> bool {
+    app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
+    if enabled {
+        app.autolaunch().enable().map_err(|e| e.to_string())
+    } else {
+        app.autolaunch().disable().map_err(|e| e.to_string())
+    }
 }
 
 #[tauri::command]
@@ -313,6 +391,14 @@ fn main() {
     let (timers, overdue) = plainpad_core::timers::TimerEngine::load(&timer_path);
 
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "settings" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
@@ -424,28 +510,48 @@ fn main() {
 
             // Currency rates: initial load from disk cache if present
             let rates_path = dir.join("state/exchange_rates.json");
+            let mut needs_refresh = true;
             if rates_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(&rates_path) {
                     plainpad_core::currency::update_rates(&content);
+                    let info = plainpad_core::currency::get_rates_info();
+                    let now_sec = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    // If rates were fetched within the last 24 hours, no need to re-fetch on startup
+                    if !info.is_seed && info.last_updated_unix > 0 && now_sec.saturating_sub(info.last_updated_unix) < 86_400 {
+                        needs_refresh = false;
+                    }
                 }
             }
 
-            // Background worker: immediate fetch on start, then refresh every 6 hours
+            // Background worker: automatically fetches once daily on startup if outdated (>24h), then refreshes daily
             let bg_rates_path = rates_path.clone();
             let bg_handle = handle.clone();
             std::thread::spawn(move || {
-                match fetch_and_save_rates(&bg_rates_path) {
-                    Ok(info) => {
-                        let _ = bg_handle.emit("rates-updated", &info);
-                    }
-                    Err(err) => {
-                        eprintln!("[plainpad] Background rate refresh failed (using cached/seed rates): {}", err);
+                if needs_refresh {
+                    match fetch_and_save_rates(&bg_rates_path) {
+                        Ok(info) => {
+                            let _ = bg_handle.emit("rates-updated", &info);
+                        }
+                        Err(err) => {
+                            eprintln!("[plainpad] Background rate refresh failed (using cached/seed rates): {}", err);
+                        }
                     }
                 }
                 loop {
+                    // Check every 6 hours if >24h has elapsed since last update
                     std::thread::sleep(std::time::Duration::from_secs(6 * 3600));
-                    if let Ok(info) = fetch_and_save_rates(&bg_rates_path) {
-                        let _ = bg_handle.emit("rates-updated", &info);
+                    let info = plainpad_core::currency::get_rates_info();
+                    let now_sec = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    if info.is_seed || now_sec.saturating_sub(info.last_updated_unix) >= 86_400 {
+                        if let Ok(new_info) = fetch_and_save_rates(&bg_rates_path) {
+                            let _ = bg_handle.emit("rates-updated", &new_info);
+                        }
                     }
                 }
             });
@@ -481,6 +587,12 @@ fn main() {
             get_always_on_top,
             get_rates_info,
             refresh_rates_now,
+            open_settings_window,
+            get_data_dir_path,
+            open_data_dir,
+            empty_trash_now,
+            is_autostart_enabled,
+            set_autostart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

@@ -80,12 +80,6 @@ interface Timer {
   fired: boolean;
 }
 
-interface RatesInfo {
-  last_updated_unix: number;
-  last_updated_utc: string;
-  currency_count: number;
-  is_seed: boolean;
-}
 
 // ---------- State ----------
 
@@ -95,6 +89,11 @@ let currentId = '';
 let currentText = '';
 let currentPlain = false;
 let globalPlain = false;
+let hideOnBlur = false;
+let swipeNav = false;
+let swipeSensitivity = 60;
+let autoBrackets = true;
+let tabWidth = '2';
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let analyzeTimeout: ReturnType<typeof setTimeout> | null = null;
 let activeTimers: Timer[] = [];
@@ -114,19 +113,11 @@ const btnExport = document.getElementById('btn-export') as HTMLButtonElement;
 const btnPin = document.getElementById('btn-pin') as HTMLButtonElement;
 const btnPlain = document.getElementById('btn-plain') as HTMLButtonElement;
 const btnSettings = document.getElementById('btn-settings') as HTMLButtonElement;
-const settingsPanel = document.getElementById('settings-panel') as HTMLDivElement;
-const btnCloseSettings = document.getElementById('btn-close-settings') as HTMLButtonElement;
-const settingTheme = document.getElementById('setting-theme') as HTMLSelectElement;
-const settingGlobalPlain = document.getElementById('setting-global-plain') as HTMLInputElement;
-const settingAlwaysOnTop = document.getElementById('setting-always-on-top') as HTMLInputElement;
 const btnAlwaysOnTop = document.getElementById('btn-always-on-top') as HTMLButtonElement;
 const btnMinimize = document.getElementById('btn-minimize') as HTMLButtonElement;
 const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement;
 const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
 const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
-const ratesStatusCount = document.getElementById('rates-status-count') as HTMLSpanElement;
-const ratesStatusUpdated = document.getElementById('rates-status-updated') as HTMLSpanElement;
-const btnRefreshRates = document.getElementById('btn-refresh-rates') as HTMLButtonElement;
 
 // ---------- Init ----------
 
@@ -159,19 +150,48 @@ buy milk, eggs, bread`;
   // Settings
   const settings = await invoke<Record<string, unknown>>('get_settings');
   if (settings) {
-    if (typeof settings.theme === 'string') {
-      applyTheme(settings.theme as string);
-      settingTheme.value = settings.theme as string;
-    }
-    if (typeof settings.global_plain === 'boolean') {
-      globalPlain = settings.global_plain as boolean;
-      settingGlobalPlain.checked = globalPlain;
-    }
+    if (typeof settings.theme === 'string') applyTheme(settings.theme);
+    if (typeof settings.font_family === 'string') applyFontFamily(settings.font_family);
+    if (typeof settings.font_size === 'number') applyFontSize(settings.font_size);
+    if (typeof settings.line_height === 'number') applyLineHeight(settings.line_height);
+    if (typeof settings.dimming === 'number') applyDimming(settings.dimming);
+    if (typeof settings.window_opacity === 'number') applyWindowOpacity(settings.window_opacity);
+    if (typeof settings.global_plain === 'boolean') globalPlain = settings.global_plain;
+    if (typeof settings.hide_on_blur === 'boolean') hideOnBlur = settings.hide_on_blur;
+    if (typeof settings.swipe_nav === 'boolean') swipeNav = settings.swipe_nav;
+    if (typeof settings.swipe_sensitivity === 'number') swipeSensitivity = settings.swipe_sensitivity;
+    if (typeof settings.auto_brackets === 'boolean') autoBrackets = settings.auto_brackets;
+    if (typeof settings.tab_width === 'string') tabWidth = settings.tab_width;
   }
+
+  // Real-time listener for settings changed in Preferences window
+  await listen('setting-changed', (payload: unknown) => {
+    const p = payload as { key: string; value: unknown };
+    if (!p || !p.key) return;
+    if (p.key === 'theme') applyTheme(String(p.value));
+    else if (p.key === 'font_family') applyFontFamily(String(p.value));
+    else if (p.key === 'font_size') applyFontSize(Number(p.value));
+    else if (p.key === 'line_height') applyLineHeight(Number(p.value));
+    else if (p.key === 'dimming') applyDimming(Number(p.value));
+    else if (p.key === 'window_opacity') applyWindowOpacity(Number(p.value));
+    else if (p.key === 'global_plain') {
+      globalPlain = !!p.value;
+      scheduleAnalyze();
+    } else if (p.key === 'hide_on_blur') {
+      hideOnBlur = !!p.value;
+    } else if (p.key === 'swipe_nav') {
+      swipeNav = !!p.value;
+    } else if (p.key === 'swipe_sensitivity') {
+      swipeSensitivity = Number(p.value);
+    } else if (p.key === 'auto_brackets') {
+      autoBrackets = !!p.value;
+    } else if (p.key === 'tab_width') {
+      tabWidth = String(p.value);
+    }
+  });
 
   const isPinned = await invoke<boolean>('get_always_on_top');
   if (btnAlwaysOnTop) btnAlwaysOnTop.classList.toggle('active', !!isPinned);
-  if (settingAlwaysOnTop) settingAlwaysOnTop.checked = !!isPinned;
 
   // Active timers
   activeTimers = (await invoke<Timer[]>('list_timers')) || [];
@@ -185,38 +205,13 @@ buy milk, eggs, bread`;
     updateTimerDisplay();
   });
 
-  // Load exchange rates status and listen for live updates
-  await loadRatesInfo();
+  // Listen for live rate updates
   try {
-    await listen('rates-updated', (payload: unknown) => {
-      const info = payload as RatesInfo;
-      if (info) {
-        updateRatesUI(info);
-        scheduleAnalyze();
-      }
+    await listen('rates-updated', () => {
+      scheduleAnalyze();
     });
   } catch (err) {
     console.warn('Failed to listen for rates-updated:', err);
-  }
-}
-
-function updateRatesUI(info: RatesInfo): void {
-  if (ratesStatusCount) {
-    ratesStatusCount.textContent = `${info.currency_count} currencies loaded`;
-  }
-  if (ratesStatusUpdated) {
-    ratesStatusUpdated.textContent = info.is_seed
-      ? 'Seed rates (offline fallback)'
-      : `Updated: ${info.last_updated_utc}`;
-  }
-}
-
-async function loadRatesInfo(): Promise<void> {
-  try {
-    const info = await invoke<RatesInfo>('get_rates_info');
-    updateRatesUI(info);
-  } catch (e) {
-    console.error('Failed to get rates info:', e);
   }
 }
 
@@ -474,13 +469,14 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
       const isRunning = activeTimers.some((t) => !t.fired);
+      const clockSvg = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align: -1px; margin-right: 5px;"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v3.5l2 2"/></svg>`;
       if (isRunning) {
-        el.textContent = `⏱ Running (Click to stop)`;
+        el.innerHTML = `${clockSvg}Running (Click to stop)`;
         el.classList.add('running');
         el.title = 'Click to stop timer';
         el.addEventListener('click', () => stopActiveTimer());
       } else {
-        el.textContent = `⏱ Start ${anno.value} (Enter)`;
+        el.innerHTML = `${clockSvg}Start ${anno.value} (Enter)`;
         el.title = 'Click or press Enter to start timer';
         el.addEventListener('click', () => startTimerFromLine(anno.line));
       }
@@ -490,7 +486,8 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el.className = 'anno anno-timer-chip stop';
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
-      el.textContent = `⏹ Stop timer (Enter)`;
+      const stopSvg = `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>`;
+      el.innerHTML = `${stopSvg}Stop timer (Enter)`;
       el.title = 'Click or press Enter to stop active timer';
       el.addEventListener('click', () => stopActiveTimer());
       overlay.appendChild(el);
@@ -671,7 +668,7 @@ function updateTimerDisplay(): void {
   timerDisplay.innerHTML = `
     <span class="timer-label">${nearest.name}</span>
     <span class="timer-value">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</span>
-    <button class="timer-btn-stop" title="Stop timer">✕</button>
+    <button class="timer-btn-stop" title="Stop timer"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   `;
 
   const btnStop = timerDisplay.querySelector('.timer-btn-stop');
@@ -682,10 +679,10 @@ function updateTimerDisplay(): void {
 }
 
 function showTimerNotification(name: string, overdue: boolean): void {
-  const msg = overdue ? `⏰ ${name} (missed while away)` : `⏰ ${name} — time's up!`;
+  const msg = overdue ? `${name} (missed while away)` : `${name} — time's up!`;
   // Show in-app notification (flash the timer display)
   timerDisplay.classList.remove('hidden');
-  timerDisplay.innerHTML = `<span class="timer-value" style="color: var(--accent-coral)">${msg}</span>`;
+  timerDisplay.innerHTML = `<span class="timer-value" style="color: var(--anno-math)">${msg}</span>`;
   setTimeout(() => updateTimerDisplay(), 5000);
 }
 
@@ -709,13 +706,52 @@ async function exportNote(): Promise<void> {
 // ---------- Settings ----------
 
 function applyTheme(theme: string): void {
-  if (theme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
+  if (theme === 'dark' || theme === 'oled' || theme === 'slate' || theme === 'light') {
+    document.documentElement.setAttribute('data-theme', theme);
   } else {
     document.documentElement.removeAttribute('data-theme');
   }
+}
+
+function applyFontFamily(font?: string): void {
+  if (!font) return;
+  let family = "var(--font-mono)";
+  if (font === 'jetbrains') family = "'JetBrains Mono', monospace";
+  else if (font === 'cascadia') family = "'Cascadia Code', monospace";
+  else if (font === 'fira') family = "'Fira Code', monospace";
+  else if (font === 'inter') family = "Inter, -apple-system, sans-serif";
+  else if (font === 'monospace') family = "monospace";
+  editor.style.fontFamily = family;
+  if (backdrop) backdrop.style.fontFamily = family;
+  if (mirror) mirror.style.fontFamily = family;
+}
+
+function applyFontSize(size?: number): void {
+  if (!size || size < 10) return;
+  const s = `${size}px`;
+  editor.style.fontSize = s;
+  if (backdrop) backdrop.style.fontSize = s;
+  if (mirror) mirror.style.fontSize = s;
+}
+
+function applyLineHeight(lh?: number): void {
+  if (!lh || lh < 1) return;
+  const s = `${lh}`;
+  editor.style.lineHeight = s;
+  if (backdrop) backdrop.style.lineHeight = s;
+  if (mirror) mirror.style.lineHeight = s;
+}
+
+function applyDimming(dim?: number): void {
+  if (dim === undefined || dim === null) return;
+  const alpha = Math.min(1.0, Math.max(0.3, dim / 100));
+  document.documentElement.style.setProperty('--anno-opacity', `${alpha}`);
+}
+
+function applyWindowOpacity(op?: number): void {
+  if (op === undefined || op === null) return;
+  const alpha = Math.min(1.0, Math.max(0.7, op / 100));
+  document.documentElement.style.setProperty('--window-opacity', `${alpha}`);
 }
 
 // ---------- Autosave ----------
@@ -762,13 +798,25 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
   // Esc → hide window
   if (e.key === 'Escape') {
     e.preventDefault();
-    if (!settingsPanel.classList.contains('hidden')) {
-      settingsPanel.classList.add('hidden');
-      return;
-    }
-    // Hide the Tauri window
     invoke('hide_window');
     return;
+  }
+
+  // Auto-close brackets and quotes
+  const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
+  if (autoBrackets && pairs[e.key]) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    if (start === end) {
+      e.preventDefault();
+      const close = pairs[e.key];
+      editor.value = editor.value.substring(0, start) + e.key + close + editor.value.substring(end);
+      editor.selectionStart = editor.selectionEnd = start + 1;
+      updateBackdrop();
+      scheduleSave();
+      scheduleAnalyze();
+      return;
+    }
   }
 
   // Tab → accept chip or indent
@@ -781,6 +829,16 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
       acceptChip(chipLine, editor.value.split('\n')[chipLine] || '');
       return;
     }
+    e.preventDefault();
+    const indent = tabWidth === 'tab' ? '\t' : (tabWidth === '4' ? '    ' : '  ');
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + indent + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + indent.length;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
   }
 
   // Enter on a timer line → start or stop timer
@@ -848,8 +906,9 @@ btnNext.addEventListener('click', () => nextNote());
 btnNew.addEventListener('click', () => createNewNote());
 btnDelete.addEventListener('click', () => deleteCurrentNote());
 btnExport.addEventListener('click', () => exportNote());
-btnSettings.addEventListener('click', () => settingsPanel.classList.toggle('hidden'));
-btnCloseSettings.addEventListener('click', () => settingsPanel.classList.add('hidden'));
+btnSettings.addEventListener('click', () => {
+  invoke('open_settings_window').catch(console.error);
+});
 
 btnPin.addEventListener('click', async () => {
   if (!currentId || !notes[currentIndex]) return;
@@ -868,44 +927,42 @@ async function togglePlainMode(): Promise<void> {
   scheduleAnalyze();
 }
 
-// Settings changes
-settingTheme.addEventListener('change', async () => {
-  const theme = settingTheme.value;
-  applyTheme(theme);
-  await invoke('set_setting', { key: 'theme', value: theme });
-});
-
-settingGlobalPlain.addEventListener('change', async () => {
-  globalPlain = settingGlobalPlain.checked;
-  await invoke('set_setting', { key: 'global_plain', value: globalPlain });
-  scheduleAnalyze();
-});
-
-btnRefreshRates?.addEventListener('click', async () => {
-  btnRefreshRates.disabled = true;
-  btnRefreshRates.textContent = 'Updating…';
-  try {
-    const info = await invoke<RatesInfo>('refresh_rates_now');
-    updateRatesUI(info);
-    scheduleAnalyze();
-  } catch (err) {
-    console.error('Failed to refresh rates:', err);
-  } finally {
-    btnRefreshRates.disabled = false;
-    btnRefreshRates.textContent = '↻ Update';
-  }
-});
-
 btnAlwaysOnTop?.addEventListener('click', async () => {
   const newVal = await invoke<boolean>('toggle_always_on_top');
   btnAlwaysOnTop.classList.toggle('active', !!newVal);
-  if (settingAlwaysOnTop) settingAlwaysOnTop.checked = !!newVal;
 });
 
-settingAlwaysOnTop?.addEventListener('change', async () => {
-  const newVal = await invoke<boolean>('toggle_always_on_top');
-  if (btnAlwaysOnTop) btnAlwaysOnTop.classList.toggle('active', !!newVal);
+// Auto-hide when focus is lost (Antinote behavior: applies only while unpinned)
+window.addEventListener('blur', async () => {
+  if (hideOnBlur) {
+    const isPinned = await invoke<boolean>('get_always_on_top').catch(() => false);
+    if (!isPinned) {
+      invoke('hide_window');
+    }
+  }
 });
+
+// Trackpad swipe between notes
+let accumulatedDeltaX = 0;
+let swipeCooldown = false;
+window.addEventListener('wheel', (e: WheelEvent) => {
+  if (!swipeNav || swipeCooldown) return;
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 10) {
+    accumulatedDeltaX += e.deltaX;
+    if (Math.abs(accumulatedDeltaX) >= swipeSensitivity) {
+      swipeCooldown = true;
+      if (accumulatedDeltaX > 0) {
+        nextNote();
+      } else {
+        prevNote();
+      }
+      accumulatedDeltaX = 0;
+      setTimeout(() => { swipeCooldown = false; }, 350);
+    }
+  } else {
+    accumulatedDeltaX = 0;
+  }
+}, { passive: true });
 
 btnMinimize?.addEventListener('click', () => {
   invoke('minimize_window');

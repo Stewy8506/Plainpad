@@ -137,54 +137,45 @@ body {
   overflow: hidden;
 }
 
-/* ---------- Drag Region ---------- */
-#drag-region {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--chrome-height);
-  -webkit-app-region: drag;
-  z-index: 100;
-}
-
-/* ---------- Chrome Bars (hover-revealed) ---------- */
+/* ---------- Chrome Bars ---------- */
 .chrome-bar {
   display: flex;
   align-items: center;
   gap: 4px;
   height: var(--chrome-height);
   padding: 0 var(--pad-x);
-  opacity: 0;
-  transition: opacity var(--transition);
   z-index: 50;
   flex-shrink: 0;
-}
-
-.chrome-bar:hover,
-body:has(#editor:focus) .chrome-bar:hover,
-body.ctrl-held .chrome-bar {
-  opacity: 1;
-}
-
-/* Show bars faintly on focus so keyboard users know they exist */
-body:has(#editor:focus) .chrome-bar {
-  opacity: 0.2;
+  transition: opacity var(--transition), border-color var(--transition);
 }
 
 #top-bar {
-  background: linear-gradient(to bottom, var(--bg-card), transparent);
-  border-bottom: 1px solid transparent;
+  opacity: 0.85;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+  padding-left: 10px;
+  padding-right: 6px;
 }
-#top-bar:hover {
-  border-bottom-color: var(--border);
+
+#top-bar:hover,
+#top-bar:focus-within {
+  opacity: 1;
 }
 
 #bottom-bar {
+  opacity: 0.65;
   background: linear-gradient(to top, var(--bg-card), transparent);
   border-top: 1px solid transparent;
+  padding-left: 12px;
+  padding-right: 12px;
 }
-#bottom-bar:hover {
+
+#bottom-bar:hover,
+#bottom-bar:focus-within,
+body.ctrl-held #bottom-bar {
+  opacity: 1;
   border-top-color: var(--border);
 }
 
@@ -213,6 +204,8 @@ body:has(#editor:focus) .chrome-bar {
 
 .bar-spacer {
   flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
 }
 
 .chrome-group {
@@ -222,19 +215,28 @@ body:has(#editor:focus) .chrome-bar {
   -webkit-app-region: no-drag;
 }
 
+.window-controls {
+  gap: 2px;
+}
+
 .window-controls .chrome-btn {
-  font-size: 12px;
-  width: 26px;
-  height: 24px;
+  font-size: 13px;
+  width: 28px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  border-radius: 6px;
 }
 
 .window-controls .btn-close-win:hover {
   background: #e81123 !important;
   color: #ffffff !important;
+}
+
+#btn-always-on-top {
+  margin-right: 2px;
 }
 
 #btn-always-on-top.active {

@@ -80,6 +80,13 @@ interface Timer {
   fired: boolean;
 }
 
+interface RatesInfo {
+  last_updated_unix: number;
+  last_updated_utc: string;
+  currency_count: number;
+  is_seed: boolean;
+}
+
 // ---------- State ----------
 
 let notes: NoteMeta[] = [];
@@ -117,6 +124,9 @@ const btnMinimize = document.getElementById('btn-minimize') as HTMLButtonElement
 const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement;
 const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
 const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
+const ratesStatusCount = document.getElementById('rates-status-count') as HTMLSpanElement;
+const ratesStatusUpdated = document.getElementById('rates-status-updated') as HTMLSpanElement;
+const btnRefreshRates = document.getElementById('btn-refresh-rates') as HTMLButtonElement;
 
 // ---------- Init ----------
 
@@ -174,6 +184,40 @@ buy milk, eggs, bread`;
     activeTimers = activeTimers.filter((t) => t.id !== p.id);
     updateTimerDisplay();
   });
+
+  // Load exchange rates status and listen for live updates
+  await loadRatesInfo();
+  try {
+    await listen('rates-updated', (payload: unknown) => {
+      const info = payload as RatesInfo;
+      if (info) {
+        updateRatesUI(info);
+        scheduleAnalyze();
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to listen for rates-updated:', err);
+  }
+}
+
+function updateRatesUI(info: RatesInfo): void {
+  if (ratesStatusCount) {
+    ratesStatusCount.textContent = `${info.currency_count} currencies loaded`;
+  }
+  if (ratesStatusUpdated) {
+    ratesStatusUpdated.textContent = info.is_seed
+      ? 'Seed rates (offline fallback)'
+      : `Updated: ${info.last_updated_utc}`;
+  }
+}
+
+async function loadRatesInfo(): Promise<void> {
+  try {
+    const info = await invoke<RatesInfo>('get_rates_info');
+    updateRatesUI(info);
+  } catch (e) {
+    console.error('Failed to get rates info:', e);
+  }
 }
 
 // ---------- Note CRUD ----------
@@ -417,7 +461,8 @@ function renderOverlay(analysis: Analysis, text: string): void {
       overlay.appendChild(el);
     } else if (anno.kind === 'conversion' && anno.confidence >= 0.85 && anno.value) {
       const el = document.createElement('div');
-      el.className = 'anno anno-conversion';
+      const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
+      el.className = `anno anno-conversion${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
       el.textContent = anno.value;
@@ -834,6 +879,21 @@ settingGlobalPlain.addEventListener('change', async () => {
   globalPlain = settingGlobalPlain.checked;
   await invoke('set_setting', { key: 'global_plain', value: globalPlain });
   scheduleAnalyze();
+});
+
+btnRefreshRates?.addEventListener('click', async () => {
+  btnRefreshRates.disabled = true;
+  btnRefreshRates.textContent = 'Updating…';
+  try {
+    const info = await invoke<RatesInfo>('refresh_rates_now');
+    updateRatesUI(info);
+    scheduleAnalyze();
+  } catch (err) {
+    console.error('Failed to refresh rates:', err);
+  } finally {
+    btnRefreshRates.disabled = false;
+    btnRefreshRates.textContent = '↻ Update';
+  }
 });
 
 btnAlwaysOnTop?.addEventListener('click', async () => {

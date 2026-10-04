@@ -4,6 +4,7 @@
 //! Storage is plain files: one `.txt` per note, JSON sidecars for state.
 //! There is no database anywhere in this crate.
 
+pub mod currency;
 pub mod export;
 pub mod intent;
 pub mod mathwrap;

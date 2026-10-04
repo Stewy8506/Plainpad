@@ -423,6 +423,9 @@ body:has(#editor:focus) .chrome-bar {
   color: var(--text-muted);
   font-weight: 300;
 }
+.anno-conversion.has-equals::before {
+  content: '';
+}
 
 /* Suggestion chip */
 .anno-chip {
@@ -637,6 +640,56 @@ body:has(#editor:focus) .chrome-bar {
 .setting-group input[type="checkbox"] {
   margin-right: 8px;
   accent-color: var(--accent-coral);
+}
+
+.rates-status-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  margin-top: 4px;
+}
+
+.rates-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#rates-status-count {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.rates-updated-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.rates-refresh-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--accent-teal);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.rates-refresh-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-teal);
+}
+
+.rates-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .settings-close {

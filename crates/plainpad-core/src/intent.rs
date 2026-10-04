@@ -278,6 +278,11 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
     // Reject sentences: too many words that are not part of math.
     let words = t.split_whitespace().count();
 
+    // Currency & crypto conversion (`$32 USD to JPY =`, `100 usd in inr`, `0.5 btc to usd`, `₹5,000 in usd`).
+    if let Some((res, why)) = crate::currency::evaluate_currency(t) {
+        return Some(("conversion", 0.95, res, why));
+    }
+
     // Base conversion (255 in binary) is checked first so fend doesn't strip the base prefix.
     if let Some(res) = mathwrap::base_conversion(t) {
         return Some(("conversion", 0.92, res, "recognised `<number> in <base>`".into()));
@@ -479,5 +484,17 @@ mod tests {
         let a = analyze(text, false);
         let total_anno = a.annotations.iter().find(|x| x.line == 4).expect("total annotation");
         assert_eq!(total_anno.value.replace(',', ""), "24010000");
+    }
+
+    #[test]
+    fn currency_conversions_annotated() {
+        let text = "$32 USD to JPY =\n100 usd in inr\n50 eur to gbp\n₹5,000 in usd\n0.5 btc to usd";
+        let a = analyze(text, false);
+        assert_eq!(a.annotations.len(), 5);
+        for anno in &a.annotations {
+            assert_eq!(anno.kind, "conversion");
+            assert!(anno.confidence >= 0.9);
+            assert!(!anno.value.is_empty());
+        }
     }
 }

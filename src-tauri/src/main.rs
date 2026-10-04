@@ -233,6 +233,76 @@ fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
     state.lock().unwrap().store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
+#[tauri::command]
+fn get_rates_info() -> plainpad_core::currency::RatesInfo {
+    plainpad_core::currency::get_rates_info()
+}
+
+#[tauri::command]
+fn refresh_rates_now(app: AppHandle) -> Result<plainpad_core::currency::RatesInfo, String> {
+    let dir = data_dir();
+    let rates_path = dir.join("state/exchange_rates.json");
+    let info = fetch_and_save_rates(&rates_path)?;
+    let _ = app.emit("rates-updated", &info);
+    Ok(info)
+}
+
+fn fetch_and_save_rates(rates_path: &std::path::Path) -> Result<plainpad_core::currency::RatesInfo, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("Plainpad/0.1")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let fiat_res = client
+        .get("https://open.er-api.com/v6/latest/USD")
+        .send()
+        .map_err(|e| format!("Fiat fetch failed: {}", e))?;
+
+    let mut fiat_json: serde_json::Value = fiat_res
+        .json()
+        .map_err(|e| format!("Fiat json parse failed: {}", e))?;
+
+    // Fetch crypto rates from CoinGecko
+    if let Ok(crypto_res) = client
+        .get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd")
+        .send()
+    {
+        if let Ok(crypto_json) = crypto_res.json::<serde_json::Value>() {
+            if let Some(rates_obj) = fiat_json.get_mut("rates").and_then(|r| r.as_object_mut()) {
+                if let Some(btc_usd) = crypto_json.get("bitcoin").and_then(|b| b.get("usd")).and_then(|u| u.as_f64()) {
+                    if btc_usd > 0.0 {
+                        rates_obj.insert("BTC".into(), serde_json::json!(1.0 / btc_usd));
+                    }
+                }
+                if let Some(eth_usd) = crypto_json.get("ethereum").and_then(|b| b.get("usd")).and_then(|u| u.as_f64()) {
+                    if eth_usd > 0.0 {
+                        rates_obj.insert("ETH".into(), serde_json::json!(1.0 / eth_usd));
+                    }
+                }
+                if let Some(sol_usd) = crypto_json.get("solana").and_then(|b| b.get("usd")).and_then(|u| u.as_f64()) {
+                    if sol_usd > 0.0 {
+                        rates_obj.insert("SOL".into(), serde_json::json!(1.0 / sol_usd));
+                    }
+                }
+            }
+        }
+    }
+
+    let json_str = serde_json::to_string_pretty(&fiat_json).map_err(|e| e.to_string())?;
+
+    // Update in-memory engine
+    plainpad_core::currency::update_rates(&json_str);
+
+    // Save to disk
+    if let Some(parent) = rates_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(rates_path, &json_str);
+
+    Ok(plainpad_core::currency::get_rates_info())
+}
+
 // ---------- main ----------
 
 fn main() {
@@ -352,6 +422,34 @@ fn main() {
                 });
             }
 
+            // Currency rates: initial load from disk cache if present
+            let rates_path = dir.join("state/exchange_rates.json");
+            if rates_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&rates_path) {
+                    plainpad_core::currency::update_rates(&content);
+                }
+            }
+
+            // Background worker: immediate fetch on start, then refresh every 6 hours
+            let bg_rates_path = rates_path.clone();
+            let bg_handle = handle.clone();
+            std::thread::spawn(move || {
+                match fetch_and_save_rates(&bg_rates_path) {
+                    Ok(info) => {
+                        let _ = bg_handle.emit("rates-updated", &info);
+                    }
+                    Err(err) => {
+                        eprintln!("[plainpad] Background rate refresh failed (using cached/seed rates): {}", err);
+                    }
+                }
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(6 * 3600));
+                    if let Ok(info) = fetch_and_save_rates(&bg_rates_path) {
+                        let _ = bg_handle.emit("rates-updated", &info);
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -381,6 +479,8 @@ fn main() {
             toggle_maximize,
             toggle_always_on_top,
             get_always_on_top,
+            get_rates_info,
+            refresh_rates_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

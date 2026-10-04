@@ -17,9 +17,18 @@ const win = window as any;
 // ---------- Tauri IPC bridge ----------
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const tauri: TauriAPI | undefined = win.__TAURI__;
-  if (tauri) {
-    return tauri.core.invoke(cmd, args) as Promise<T>;
+  const t = win.__TAURI__;
+  if (t) {
+    if (t.core && typeof t.core.invoke === 'function') {
+      return t.core.invoke(cmd, args) as Promise<T>;
+    }
+    if (typeof t.invoke === 'function') {
+      return t.invoke(cmd, args) as Promise<T>;
+    }
+  }
+  const internals = win.__TAURI_INTERNALS__;
+  if (internals && typeof internals.invoke === 'function') {
+    return internals.invoke(cmd, args) as Promise<T>;
   }
   console.warn(`[mock] invoke(${cmd})`, args);
   return null as unknown as T;
@@ -86,6 +95,7 @@ let activeTimers: Timer[] = [];
 // ---------- DOM refs ----------
 
 const editor = document.getElementById('editor') as HTMLTextAreaElement;
+const backdrop = document.getElementById('editor-backdrop') as HTMLDivElement;
 const mirror = document.getElementById('editor-mirror') as HTMLDivElement;
 const overlay = document.getElementById('editor-overlay') as HTMLDivElement;
 const noteIndex = document.getElementById('note-index') as HTMLSpanElement;
@@ -101,6 +111,11 @@ const settingsPanel = document.getElementById('settings-panel') as HTMLDivElemen
 const btnCloseSettings = document.getElementById('btn-close-settings') as HTMLButtonElement;
 const settingTheme = document.getElementById('setting-theme') as HTMLSelectElement;
 const settingGlobalPlain = document.getElementById('setting-global-plain') as HTMLInputElement;
+const settingAlwaysOnTop = document.getElementById('setting-always-on-top') as HTMLInputElement;
+const btnAlwaysOnTop = document.getElementById('btn-always-on-top') as HTMLButtonElement;
+const btnMinimize = document.getElementById('btn-minimize') as HTMLButtonElement;
+const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement;
+const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
 const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
 
 // ---------- Init ----------
@@ -144,6 +159,10 @@ buy milk, eggs, bread`;
     }
   }
 
+  const isPinned = await invoke<boolean>('get_always_on_top');
+  if (btnAlwaysOnTop) btnAlwaysOnTop.classList.toggle('active', !!isPinned);
+  if (settingAlwaysOnTop) settingAlwaysOnTop.checked = !!isPinned;
+
   // Active timers
   activeTimers = (await invoke<Timer[]>('list_timers')) || [];
   updateTimerDisplay();
@@ -173,6 +192,7 @@ async function loadNote(index: number): Promise<void> {
   const note = await invoke<Note>('load_note', { id: currentId });
   currentText = note?.text || '';
   editor.value = currentText;
+  updateBackdrop();
 
   updateNoteUI();
   scheduleAnalyze();
@@ -207,6 +227,7 @@ async function createNewNote(): Promise<void> {
   currentId = id;
   currentText = '';
   editor.value = '';
+  updateBackdrop();
   await loadNotes();
 
   // New note goes to front
@@ -282,6 +303,72 @@ async function runAnalysis(): Promise<void> {
   document.body.classList.toggle('code-mode', analysis.code_mode);
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function updateBackdrop(): void {
+  if (!backdrop) return;
+  const text = editor.value;
+  if (!text) {
+    backdrop.innerHTML = '';
+    return;
+  }
+  const lines = text.split('\n');
+  const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
+
+  const htmlLines = lines.map((line, idx) => {
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    // Mode keyword on first non-empty line turns green/colored immediately
+    if (idx === firstNonEmpty) {
+      if (lower === 'math') {
+        return `<span class="hl-mode hl-mode-math">${escapeHtml(line)}</span>`;
+      } else if (lower === 'calcs') {
+        return `<span class="hl-mode hl-mode-calcs">${escapeHtml(line)}</span>`;
+      } else if (lower === 'sum') {
+        return `<span class="hl-mode hl-mode-sum">${escapeHtml(line)}</span>`;
+      } else if (lower === 'list') {
+        return `<span class="hl-mode hl-mode-list">${escapeHtml(line)}</span>`;
+      } else if (lower === 'paste') {
+        return `<span class="hl-mode hl-mode-paste">${escapeHtml(line)}</span>`;
+      } else if (lower === 'code' || lower.startsWith('code:')) {
+        return `<span class="hl-mode hl-mode-code">${escapeHtml(line)}</span>`;
+      }
+    }
+
+    // Comment lines (// ...)
+    if (trimmed.startsWith('//')) {
+      return `<span class="hl-comment">${escapeHtml(line)}</span>`;
+    }
+
+    // Variable / label lines: e.g. "trees: 23,405" or "rent = 12000"
+    const colonIdx = line.indexOf(':');
+    const eqIdx = line.indexOf('=');
+    if (colonIdx > 0 && (eqIdx < 0 || colonIdx < eqIdx)) {
+      const label = line.substring(0, colonIdx);
+      if (label.trim().length > 0 && label.trim().split(/\s+/).length <= 4) {
+        const rest = line.substring(colonIdx + 1);
+        return `<span class="hl-var">${escapeHtml(label)}</span><span class="hl-punct">:</span>${escapeHtml(rest)}`;
+      }
+    }
+
+    return escapeHtml(line);
+  });
+
+  let resultHtml = htmlLines.join('\n');
+  if (text.endsWith('\n')) {
+    resultHtml += '\n ';
+  }
+  backdrop.innerHTML = resultHtml;
+}
+
 function renderOverlay(analysis: Analysis, text: string): void {
   const lines = text.split('\n');
   overlay.innerHTML = '';
@@ -289,47 +376,42 @@ function renderOverlay(analysis: Analysis, text: string): void {
   // Sync scroll position with textarea
   overlay.style.top = `-${editor.scrollTop}px`;
 
-  // Compute line heights from the mirror
+  // Compute line heights and text widths from the mirror
   mirror.textContent = '';
-  const lineEls: HTMLSpanElement[] = [];
+  const lineEls: HTMLDivElement[] = [];
+  const textSpans: HTMLSpanElement[] = [];
   for (let i = 0; i < lines.length; i++) {
+    const row = document.createElement('div');
     const span = document.createElement('span');
     span.textContent = lines[i] || ' ';
-    span.style.display = 'block';
-    mirror.appendChild(span);
-    lineEls.push(span);
-  }
-
-  // Check for mode word on first non-empty line
-  const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
-  if (firstNonEmpty >= 0) {
-    const modeWord = lines[firstNonEmpty].trim().toLowerCase();
-    const knownModes = ['math', 'list', 'code', 'sum', 'calcs', 'paste'];
-    const isMode = knownModes.includes(modeWord) || modeWord.startsWith('code:');
-    if (isMode) {
-      const el = document.createElement('div');
-      el.className = `anno anno-mode ${modeWord.split(':')[0]}`;
-      const lineEl = lineEls[firstNonEmpty];
-      if (lineEl) {
-        el.style.top = `${lineEl.offsetTop}px`;
-      }
-      el.textContent = lines[firstNonEmpty].trim();
-      // Hide the original text in the textarea for mode words?
-      // No — "plain text is the source of truth" — we just style the overlay.
-      overlay.appendChild(el);
-    }
+    span.style.display = 'inline-block';
+    row.appendChild(span);
+    mirror.appendChild(row);
+    lineEls.push(row);
+    textSpans.push(span);
   }
 
   for (const anno of analysis.annotations) {
     if (anno.line >= lineEls.length) continue;
     const lineEl = lineEls[anno.line];
-    if (!lineEl) continue;
+    const textSpan = textSpans[anno.line];
+    if (!lineEl || !textSpan) continue;
     const top = lineEl.offsetTop;
+    const rawLine = lines[anno.line] || '';
+    const lineText = rawLine.trim();
+
+    // Inline left position: placed right after typed text with clean spacing
+    const padX = 20; // var(--pad-x)
+    const textWidth = lineText.length > 0 ? textSpan.offsetWidth : 0;
+    const maxLeft = Math.max(padX, editor.clientWidth - 130);
+    const left = Math.min(padX + textWidth + 10, maxLeft);
 
     if (anno.kind === 'math' && anno.confidence >= 0.85 && anno.value) {
       const el = document.createElement('div');
-      el.className = 'anno anno-math';
+      const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
+      el.className = `anno anno-math${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
       el.textContent = formatNumber(anno.value);
       el.title = anno.why;
       overlay.appendChild(el);
@@ -337,12 +419,38 @@ function renderOverlay(analysis: Analysis, text: string): void {
       const el = document.createElement('div');
       el.className = 'anno anno-conversion';
       el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
       el.textContent = anno.value;
       el.title = anno.why;
       overlay.appendChild(el);
-    } else if (anno.kind === 'checklist' && anno.confidence >= 0.85) {
-      // Render checkbox overlay
-      const lineText = lines[anno.line]?.trim() || '';
+    } else if (anno.kind === 'timer') {
+      const el = document.createElement('div');
+      el.className = 'anno anno-timer-chip';
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+      const isRunning = activeTimers.some((t) => !t.fired);
+      if (isRunning) {
+        el.textContent = `⏱ Running (Click to stop)`;
+        el.classList.add('running');
+        el.title = 'Click to stop timer';
+        el.addEventListener('click', () => stopActiveTimer());
+      } else {
+        el.textContent = `⏱ Start ${anno.value} (Enter)`;
+        el.title = 'Click or press Enter to start timer';
+        el.addEventListener('click', () => startTimerFromLine(anno.line));
+      }
+      overlay.appendChild(el);
+    } else if (anno.kind === 'timer_stop') {
+      const el = document.createElement('div');
+      el.className = 'anno anno-timer-chip stop';
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+      el.textContent = `⏹ Stop timer (Enter)`;
+      el.title = 'Click or press Enter to stop active timer';
+      el.addEventListener('click', () => stopActiveTimer());
+      overlay.appendChild(el);
+    } else if (anno.kind === 'checklist' && (lineText.startsWith('[ ] ') || lineText.startsWith('[x] ') || lineText.startsWith('[X] '))) {
+      // Render checkbox overlay for already converted checkbox lines
       const isChecked = lineText.startsWith('[x] ') || lineText.startsWith('[X] ');
       const el = document.createElement('div');
       el.className = `anno-checkbox${isChecked ? ' checked' : ''}`;
@@ -350,19 +458,15 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el.dataset.line = String(anno.line);
       el.addEventListener('click', () => toggleCheckbox(anno.line));
       overlay.appendChild(el);
-    } else if (anno.chip && anno.confidence >= 0.5 && anno.confidence < 0.85) {
+    } else if (anno.chip) {
       const el = document.createElement('div');
       el.className = 'anno anno-chip';
       el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+      el.dataset.line = String(anno.line);
       el.textContent = anno.chip;
       el.title = anno.why;
-      overlay.appendChild(el);
-    } else if (anno.kind === 'timer' && anno.value) {
-      const el = document.createElement('div');
-      el.className = 'anno anno-timer';
-      el.style.top = `${top}px`;
-      el.textContent = `⏱ ${anno.value}`;
-      el.title = anno.why;
+      el.addEventListener('click', () => acceptChip(anno.line, lines[anno.line] || ''));
       overlay.appendChild(el);
     }
   }
@@ -410,6 +514,12 @@ function acceptChip(lineIndex: number, text: string): void {
   if (lineIndex >= lines.length) return;
   const line = lines[lineIndex];
 
+  // Timer line: start timer
+  if (line.toLowerCase().startsWith('timer') || line.toLowerCase().startsWith('remind')) {
+    startTimerFromLine(lineIndex);
+    return;
+  }
+
   // "Make checklist" → convert comma-list or "todo" to checkboxes
   if (text.toLowerCase().startsWith('todo ')) {
     lines[lineIndex] = '[ ] ' + line.substring(line.toLowerCase().indexOf('todo ') + 5);
@@ -420,6 +530,7 @@ function acceptChip(lineIndex: number, text: string): void {
   }
 
   editor.value = lines.join('\n');
+  updateBackdrop();
   scheduleSave();
   scheduleAnalyze();
 }
@@ -427,29 +538,29 @@ function acceptChip(lineIndex: number, text: string): void {
 // ---------- Timer actions ----------
 
 async function startTimerFromLine(lineIndex: number): Promise<void> {
-  // This is triggered when user presses Enter on a timer line
   const lines = editor.value.split('\n');
   if (lineIndex >= lines.length) return;
   const line = lines[lineIndex].trim();
 
-  // Parse duration from the analysis
+  // Parse duration from the analysis or raw text
   const analysis = await invoke<Analysis>('analyze_note', { text: line, plain: false });
   const timerAnno = analysis?.annotations?.find((a) => a.kind === 'timer');
-  if (!timerAnno) return;
 
-  // Extract name and duration from the chip text
-  // The Rust side already parsed it — we need the raw duration.
-  // Call start_timer with parsed values
-  const match = line.match(/timer\s+(.*)/i) || line.match(/remind\s+(?:me\s+)?in\s+(.*)/i);
-  if (!match) return;
-
-  // Re-parse on Rust side and start
-  const durationMs = parseDurationFromValue(timerAnno.value);
+  const durationMs = timerAnno ? parseDurationFromValue(timerAnno.value) : (parseDurationFromValue(line) || 300_000);
   if (durationMs > 0) {
-    const name = timerAnno.chip.replace(/^Start timer \(/, '').replace(/\)$/, '') || 'Timer';
-    const id = await invoke<number>('start_timer', { name, durationMs });
+    let name = 'Timer';
+    if (timerAnno?.chip) {
+      name = timerAnno.chip
+        .replace(/^Start timer \(/i, '')
+        .replace(/^⏱ Start /i, '')
+        .replace(/\)\s*\(Enter\)$/i, '')
+        .replace(/\(Enter\)$/i, '')
+        .replace(/\)$/i, '')
+        .trim() || 'Timer';
+    }
+    const id = await invoke<number>('start_timer', { name, durationMs, duration_ms: durationMs });
     activeTimers.push({
-      id,
+      id: id || Date.now(),
       name,
       due_ms: Date.now() + durationMs,
       duration_ms: durationMs,
@@ -460,21 +571,44 @@ async function startTimerFromLine(lineIndex: number): Promise<void> {
 }
 
 function parseDurationFromValue(value: string): number {
-  // Parse "25 min", "1 h 30 min", "90 s"
   let ms = 0;
-  const parts = value.match(/(\d+)\s*(h|hr|hour|min|m|s|sec)/gi);
-  if (!parts) return 0;
-  for (const part of parts) {
-    const m = part.match(/(\d+)\s*(h|hr|hour|min|m|s|sec)/i);
-    if (!m) continue;
-    const n = parseInt(m[1], 10);
-    const unit = m[2].toLowerCase();
-    if (unit === 'h' || unit === 'hr' || unit === 'hour') ms += n * 3600000;
-    else if (unit === 'min' || unit === 'm') ms += n * 60000;
-    else if (unit === 's' || unit === 'sec') ms += n * 1000;
+  const parts = value.match(/(\d+)\s*(h|hr|hour|hours|min|mins|minute|minutes|m|s|sec|secs|second|seconds)/gi);
+  if (parts) {
+    for (const part of parts) {
+      const m = part.match(/(\d+)\s*(h|hr|hour|hours|min|mins|minute|minutes|m|s|sec|secs|second|seconds)/i);
+      if (!m) continue;
+      const n = parseInt(m[1], 10);
+      const unit = m[2].toLowerCase();
+      if (unit.startsWith('h')) ms += n * 3600000;
+      else if (unit.startsWith('m') && !unit.startsWith('ms')) ms += n * 60000;
+      else if (unit.startsWith('s')) ms += n * 1000;
+    }
+  }
+  if (ms === 0) {
+    const rawNum = parseInt(value.replace(/\D/g, ''), 10);
+    if (!isNaN(rawNum) && rawNum > 0) {
+      ms = rawNum * 60000; // default bare numbers to minutes (e.g. "5" -> 5 minutes)
+    }
   }
   return ms;
 }
+
+async function stopActiveTimer(id?: number): Promise<void> {
+  const timerToCancel = id !== undefined
+    ? activeTimers.find((t) => t.id === id)
+    : activeTimers.find((t) => !t.fired);
+  if (!timerToCancel) return;
+
+  await invoke('cancel_timer', { id: timerToCancel.id });
+  activeTimers = activeTimers.filter((t) => t.id !== timerToCancel.id);
+  updateTimerDisplay();
+  scheduleAnalyze();
+}
+
+timerDisplay?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  stopActiveTimer();
+});
 
 function updateTimerDisplay(): void {
   const running = activeTimers.filter((t) => !t.fired);
@@ -492,7 +626,14 @@ function updateTimerDisplay(): void {
   timerDisplay.innerHTML = `
     <span class="timer-label">${nearest.name}</span>
     <span class="timer-value">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</span>
+    <button class="timer-btn-stop" title="Stop timer">✕</button>
   `;
+
+  const btnStop = timerDisplay.querySelector('.timer-btn-stop');
+  btnStop?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    stopActiveTimer(nearest.id);
+  });
 }
 
 function showTimerNotification(name: string, overdue: boolean): void {
@@ -551,6 +692,7 @@ editor.addEventListener('paste', (e: ClipboardEvent) => {
   const after = editor.value.substring(end);
   editor.value = before + text + after;
   editor.selectionStart = editor.selectionEnd = start + text.length;
+  updateBackdrop();
   scheduleSave();
   scheduleAnalyze();
 });
@@ -558,12 +700,17 @@ editor.addEventListener('paste', (e: ClipboardEvent) => {
 // ---------- Event wiring ----------
 
 editor.addEventListener('input', () => {
+  updateBackdrop();
   scheduleSave();
   scheduleAnalyze();
 });
 
 editor.addEventListener('scroll', () => {
   overlay.style.top = `-${editor.scrollTop}px`;
+  if (backdrop) {
+    backdrop.scrollTop = editor.scrollTop;
+    backdrop.scrollLeft = editor.scrollLeft;
+  }
 });
 
 editor.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -575,7 +722,7 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
       return;
     }
     // Hide the Tauri window
-    invoke('plugin:window|hide', { label: 'main' }).catch(() => {});
+    invoke('hide_window');
     return;
   }
 
@@ -591,10 +738,15 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     }
   }
 
-  // Enter on a timer line → start timer
+  // Enter on a timer line → start or stop timer
   if (e.key === 'Enter') {
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
     const line = editor.value.split('\n')[cursorLine]?.trim().toLowerCase() || '';
+    if (line === 'timer s' || line === 'timer stop' || line === 'timer cancel' || line === 'stop timer') {
+      e.preventDefault();
+      stopActiveTimer();
+      return;
+    }
     if (line.startsWith('timer') || line.startsWith('remind')) {
       startTimerFromLine(cursorLine);
     }
@@ -682,6 +834,30 @@ settingGlobalPlain.addEventListener('change', async () => {
   globalPlain = settingGlobalPlain.checked;
   await invoke('set_setting', { key: 'global_plain', value: globalPlain });
   scheduleAnalyze();
+});
+
+btnAlwaysOnTop?.addEventListener('click', async () => {
+  const newVal = await invoke<boolean>('toggle_always_on_top');
+  btnAlwaysOnTop.classList.toggle('active', !!newVal);
+  if (settingAlwaysOnTop) settingAlwaysOnTop.checked = !!newVal;
+});
+
+settingAlwaysOnTop?.addEventListener('change', async () => {
+  const newVal = await invoke<boolean>('toggle_always_on_top');
+  if (btnAlwaysOnTop) btnAlwaysOnTop.classList.toggle('active', !!newVal);
+});
+
+btnMinimize?.addEventListener('click', () => {
+  invoke('minimize_window');
+});
+
+btnMaximize?.addEventListener('click', () => {
+  invoke('toggle_maximize');
+});
+
+btnClose?.addEventListener('click', async () => {
+  await saveCurrentNote();
+  invoke('hide_window');
 });
 
 // Window geometry persistence

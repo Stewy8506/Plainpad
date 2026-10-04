@@ -215,6 +215,33 @@ body:has(#editor:focus) .chrome-bar {
   flex: 1;
 }
 
+.chrome-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls .chrome-btn {
+  font-size: 12px;
+  width: 26px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.window-controls .btn-close-win:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+#btn-always-on-top.active {
+  color: var(--accent-coral);
+  background: var(--bg-hover);
+}
+
 .note-index {
   font-size: 12px;
   color: var(--text-muted);
@@ -234,26 +261,47 @@ body:has(#editor:focus) .chrome-bar {
   overflow: hidden;
 }
 
+#editor-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: var(--pad-y) var(--pad-x);
+  padding-right: 120px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text-primary);
+  background: transparent;
+  pointer-events: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  user-select: none;
+}
+
 #editor {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   padding: var(--pad-y) var(--pad-x);
-  padding-right: 100px; /* leave room for right-aligned results */
+  padding-right: 120px; /* leave room for right-aligned results */
   background: transparent;
   border: none;
   outline: none;
   resize: none;
-  color: var(--text-primary);
+  color: transparent; /* Raw text is transparent; styled text rendered in #editor-backdrop */
+  caret-color: var(--accent-coral);
   font-family: var(--font-mono);
   font-size: var(--font-size);
   line-height: var(--line-height);
-  caret-color: var(--accent-coral);
   overflow-y: auto;
   overflow-x: hidden;
   white-space: pre-wrap;
   word-wrap: break-word;
+  box-sizing: border-box;
   user-select: text;
   -webkit-app-region: no-drag;
 
@@ -265,6 +313,11 @@ body:has(#editor:focus) .chrome-bar {
 #editor::placeholder {
   color: var(--text-placeholder);
   font-style: italic;
+}
+
+#editor::selection {
+  background: rgba(72, 183, 136, 0.3);
+  color: transparent;
 }
 
 #editor::-webkit-scrollbar {
@@ -288,12 +341,13 @@ body:has(#editor:focus) .chrome-bar {
   left: 0;
   width: 100%;
   padding: var(--pad-y) var(--pad-x);
-  padding-right: 100px;
+  padding-right: 120px;
   font-family: var(--font-mono);
   font-size: var(--font-size);
   line-height: var(--line-height);
   white-space: pre-wrap;
   word-wrap: break-word;
+  box-sizing: border-box;
   visibility: hidden;
   pointer-events: none;
 }
@@ -301,26 +355,51 @@ body:has(#editor:focus) .chrome-bar {
 /* Overlay: positioned annotations */
 #editor-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  padding: var(--pad-y) 0;
+  inset: 0;
+  padding: 0;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* ---------- Syntax Highlighting in Backdrop ---------- */
+.hl-mode {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.hl-mode-math  { color: var(--accent-green); }
+.hl-mode-calcs { color: var(--accent-teal); }
+.hl-mode-sum   { color: var(--accent-teal); }
+.hl-mode-list  { color: var(--accent-blue); }
+.hl-mode-paste { color: var(--accent-green); }
+.hl-mode-code  { color: var(--accent-coral); }
+
+.hl-comment {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.hl-var {
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+
+.hl-punct {
+  color: var(--accent-coral);
+  font-weight: 600;
 }
 
 /* ---------- Annotation Styles ---------- */
 .anno {
   position: absolute;
-  right: var(--pad-x);
   font-family: var(--font-mono);
   font-size: var(--font-size);
   line-height: var(--line-height);
+  white-space: nowrap;
   pointer-events: auto;
   transition: opacity var(--transition);
 }
 
-/* Math result: coral, right-aligned */
+/* Math result: coral, inline */
 .anno-math {
   color: var(--accent-coral);
   font-weight: 500;
@@ -329,6 +408,9 @@ body:has(#editor:focus) .chrome-bar {
   content: '= ';
   color: var(--text-muted);
   font-weight: 300;
+}
+.anno-math.has-equals::before {
+  content: '';
 }
 
 /* Conversion result */
@@ -360,10 +442,32 @@ body:has(#editor:focus) .chrome-bar {
   border-color: var(--border-hover);
 }
 
-/* Timer badge */
+/* Timer badge and interactive chip */
 .anno-timer {
   color: var(--accent-yellow);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.anno-timer-chip {
+  background: var(--bg-surface);
+  color: var(--accent-yellow);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-chip);
+  border: 1px solid rgba(241, 250, 140, 0.4);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+  pointer-events: auto;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition);
+}
+.anno-timer-chip:hover {
+  background: var(--accent-yellow);
+  color: var(--bg-card);
+  border-color: var(--accent-yellow);
 }
 
 /* Checkbox squares rendered in overlay */
@@ -392,22 +496,6 @@ body:has(#editor:focus) .chrome-bar {
   font-weight: 700;
 }
 
-/* Mode word label (first line: "math", "code: bash") */
-.anno-mode {
-  position: absolute;
-  left: var(--pad-x);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: lowercase;
-}
-.anno-mode.math { color: var(--accent-green); }
-.anno-mode.code { color: var(--accent-coral); }
-.anno-mode.list { color: var(--accent-blue); }
-.anno-mode.sum  { color: var(--accent-teal); }
-.anno-mode.calcs { color: var(--accent-purple); }
-.anno-mode.paste { color: var(--accent-blue); }
-
 /* Title styling: slightly brighter */
 .title-line {
   color: var(--text-primary);
@@ -434,7 +522,7 @@ body:has(#editor:focus) .chrome-bar {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-btn);
-  padding: 6px 16px;
+  padding: 6px 14px;
   font-size: 13px;
   color: var(--accent-yellow);
   box-shadow: var(--shadow-chip);
@@ -442,7 +530,12 @@ body:has(#editor:focus) .chrome-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: opacity var(--transition);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+#timer-display:hover {
+  border-color: var(--accent-coral);
 }
 
 #timer-display .timer-label {
@@ -453,6 +546,31 @@ body:has(#editor:focus) .chrome-bar {
 #timer-display .timer-value {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.timer-btn-stop {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  transition: all var(--transition);
+}
+.timer-btn-stop:hover {
+  color: var(--accent-coral);
+  background: var(--bg-hover);
+}
+
+.anno-timer-chip.running {
+  border-color: var(--accent-coral);
+  color: var(--accent-coral);
+}
+.anno-timer-chip.stop {
+  border-color: var(--accent-coral);
+  color: var(--accent-coral);
 }
 
 /* ---------- Settings Panel ---------- */

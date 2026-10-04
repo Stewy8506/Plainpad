@@ -50,7 +50,7 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
     let mut forced_lang = String::new();
     if let Some(first) = lines.iter().find(|l| !l.trim().is_empty()) {
         let t = first.trim().to_lowercase();
-        if t == "math" {
+        if t == "math" || t == "calcs" || t == "sum" {
             forced = ForcedMode::Math;
         } else if t == "list" {
             forced = ForcedMode::List;
@@ -79,6 +79,18 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
         }
 
         // Timers (explicit phrases only — starting one by accident would be rude).
+        if crate::timers::is_timer_stop_phrase(t) {
+            annotations.push(Annotation {
+                line: i,
+                kind: "timer_stop",
+                confidence: 0.95,
+                value: String::new(),
+                chip: "Stop timer (Enter)".into(),
+                why: "phrase to stop running timer".into(),
+            });
+            continue;
+        }
+
         if let Some((name, ms)) = crate::timers::parse_timer_phrase(t) {
             annotations.push(Annotation {
                 line: i, kind: "timer", confidence: 0.95,
@@ -105,6 +117,26 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
                 why: "starts with the word 'todo'".into(),
             });
             continue;
+        }
+
+        // Running totals: `total` or `sum` over previous lines (Antinote feature)
+        if (lower == "total" || lower == "sum") && i > 0 {
+            if let Some(s) = compute_running_total(&lines, i, &annotations, &vars) {
+                let formatted = if s.fract() == 0.0 {
+                    format!("{}", s as i64)
+                } else {
+                    format!("{:.2}", s)
+                };
+                annotations.push(Annotation {
+                    line: i,
+                    kind: "math",
+                    confidence: 0.95,
+                    value: formatted,
+                    chip: String::new(),
+                    why: "sum of numbers and evaluated results on preceding lines".into(),
+                });
+                continue;
+            }
         }
 
         // Math / conversions / variables.
@@ -163,15 +195,84 @@ enum ForcedMode {
 
 fn is_mode_word(t: &str) -> bool {
     let l = t.to_lowercase();
-    l == "math" || l == "list" || l == "code" || l.starts_with("code:")
+    l == "math"
+        || l == "calcs"
+        || l == "sum"
+        || l == "list"
+        || l == "code"
+        || l == "paste"
+        || l.starts_with("code:")
+}
+
+fn compute_running_total(
+    lines: &[&str],
+    current_idx: usize,
+    annotations: &[Annotation],
+    vars: &Vars,
+) -> Option<f64> {
+    let mut total = 0.0;
+    let mut count = 0usize;
+
+    for j in 0..current_idx {
+        let line = lines[j].trim();
+        if line.is_empty() || line.starts_with("//") {
+            continue;
+        }
+        let lower = line.to_lowercase();
+        if is_mode_word(line) || lower == "total" || lower == "sum" {
+            continue;
+        }
+
+        // 1. If line j produced an evaluated math annotation, use its calculated result!
+        // E.g. "200 * 120050 =" produced value "24,010,000" or "24010000"
+        if let Some(anno) = annotations.iter().find(|a| a.line == j && a.kind == "math") {
+            let cleaned = anno.value.replace(',', "").trim().to_string();
+            if let Ok(v) = cleaned.parse::<f64>() {
+                total += v;
+                count += 1;
+                continue;
+            }
+        }
+
+        // 2. Or try evaluating line j as math directly
+        if let Some(out) = mathwrap::eval_line(line, vars) {
+            let cleaned = out.result.replace(',', "").trim().to_string();
+            if let Ok(v) = cleaned.parse::<f64>() {
+                total += v;
+                count += 1;
+                continue;
+            }
+        }
+
+        // 3. Fallback: parse numbers / currency from labelled line e.g. `$10 books`, `food 4500`
+        let nums = mathwrap::parse_leading_number(line);
+        if let Some(&n) = nums.first() {
+            total += n;
+            count += 1;
+        }
+    }
+
+    if count > 0 {
+        Some(total)
+    } else {
+        None
+    }
 }
 
 /// Classify a line as math/conversion. Returns (kind, confidence, value, why).
 fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static str, f32, String, String)> {
-    // Quick reject: needs a digit, operator, or variable match to be math.
-    let has_digit_or_op = t.chars().any(|c| c.is_ascii_digit() || "+-*/%=".contains(c));
+    let lower = t.to_lowercase();
+    let has_digit = t.chars().any(|c| c.is_ascii_digit());
+    let has_math_op = t.contains(['+', '*', '/', '^', '%', '&', '|', '='])
+        || t.contains(" x ")
+        || t.contains(" X ")
+        || (t.contains('-') && !t.starts_with("--"));
+    let has_func = ["sqrt", "cbrt", "abs", "sin", "cos", "tan", "log", "ln", "exp", "floor", "ceil", "round", "min", "max"]
+        .iter()
+        .any(|&f| lower.contains(f) && lower.contains('('));
     let mentions_var = vars.keys().any(|k| contains_word(t, k));
-    if !has_digit_or_op && !mentions_var && !forced_math {
+
+    if !has_digit && !has_math_op && !has_func && !mentions_var && !forced_math {
         return None;
     }
     // Reject sentences: too many words that are not part of math.
@@ -183,7 +284,6 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
     }
 
     // Unit conversion `5 km in miles`, `72 f to c` — try fend directly.
-    let lower = t.to_lowercase();
     if (lower.contains(" in ") || lower.contains(" to ")) && words <= 6 {
         if let Ok(m) = mathwrap::evaluate(t) {
             let main = m.result.trim().to_string();
@@ -200,11 +300,8 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
         }
     }
 
-    // Labelled sums / variable expressions: `rent + food`, `rent * 12`,
-    // `45 * 12`, `0xFF & 0x0F`.
-    let has_op = t.contains(['+', '-', '*', '/', 'x', 'X']) && !t.starts_with('-');
-    let mentions_var = vars.keys().any(|k| contains_word(t, k));
-    if has_op || mentions_var || forced_math {
+    // Expressions, functions, variables, labelled sums.
+    if has_math_op || has_func || mentions_var || forced_math {
         // `x` used as multiplication (Antinote-style `trees x o2 per tree`)
         let normalized = if t.contains(" x ") || t.ends_with(" x") || t.contains(" X ") {
             t.replace(" x ", " * ").replace(" X ", " * ")
@@ -217,6 +314,8 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
                 let conf = if forced_math { 0.9 } else { 0.88 };
                 let why: &str = if mentions_var {
                     "uses your named values on earlier lines"
+                } else if has_func {
+                    "mathematical function evaluation"
                 } else {
                     "line is an arithmetic expression"
                 };
@@ -352,5 +451,33 @@ mod tests {
             worst = worst.max(a.elapsed_us);
         }
         assert!(worst < 30_000, "worst run took {worst}µs (budget 30_000µs)");
+    }
+
+    #[test]
+    fn math_with_trailing_equals() {
+        let text = "math\n\n200 * 120050 =";
+        let a = analyze(text, false);
+        println!("Annotations: {:?}", a.annotations);
+        assert_eq!(a.annotations.len(), 1);
+        assert_eq!(a.annotations[0].value.replace(',', ""), "24010000");
+    }
+
+    #[test]
+    fn math_functions_and_powers() {
+        let text = "calcs\nsqrt(16)\n2^8\nabs(-42)\n-5 + 20";
+        let a = analyze(text, false);
+        assert_eq!(a.annotations.len(), 4);
+        assert_eq!(a.annotations[0].value, "4");
+        assert_eq!(a.annotations[1].value, "256");
+        assert_eq!(a.annotations[2].value, "42");
+        assert_eq!(a.annotations[3].value, "15");
+    }
+
+    #[test]
+    fn total_sums_evaluated_expressions() {
+        let text = "math\n\n200 * 120050 =\n\ntotal";
+        let a = analyze(text, false);
+        let total_anno = a.annotations.iter().find(|x| x.line == 4).expect("total annotation");
+        assert_eq!(total_anno.value.replace(',', ""), "24010000");
     }
 }

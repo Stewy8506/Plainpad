@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "build": "npm run build:ui && cargo build -p plainpad",
     "build:ui": "tsc -p tsconfig.json && node scripts/copy-ui.mjs",
+    "watch:ui": "tsc -p tsconfig.json --watch",
+    "dev": "npm run build:ui && cargo run -p plainpad",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

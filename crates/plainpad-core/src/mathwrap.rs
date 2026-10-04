@@ -300,7 +300,7 @@ pub fn block_stats(lines: &[&str]) -> BlockStats {
 
 /// Parse a leading number like `4500`, `3.5`, `-12`, `1_000` from a line
 /// (a label may precede it, e.g. `food 4500`).
-fn parse_leading_number(t: &str) -> Vec<f64> {
+pub fn parse_leading_number(t: &str) -> Vec<f64> {
     let mut cleaned = String::with_capacity(t.len());
     let mut started = false;
     for c in t.chars() {
@@ -331,10 +331,16 @@ fn parse_leading_number(t: &str) -> Vec<f64> {
 /// Try the full evaluation stack for a note line: base conversion → percent
 /// rewrite + variable substitution → raw fend. Returns None when nothing parses.
 pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
-    let t = expr.trim();
-    if t.is_empty() {
+    let raw = expr.trim().trim_end_matches(['=', '?']).trim();
+    if raw.is_empty() {
         return None;
     }
+    let t = if let Some((_, rhs)) = raw.split_once(':') {
+        let r = rhs.trim();
+        if r.chars().any(|c| c.is_ascii_digit()) { r } else { raw }
+    } else {
+        raw
+    };
     if let Some(b) = base_conversion(t) {
         return Some(MathOutcome { result: b, unit_aware: false });
     }

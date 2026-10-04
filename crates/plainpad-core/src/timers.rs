@@ -167,17 +167,32 @@ pub fn parse_timer_phrase(line: &str) -> Option<(String, u64)> {
         .strip_prefix("timer")
         .or_else(|| lower.strip_prefix("remind me in"))
         .or_else(|| lower.strip_prefix("remind in"))?;
-    if rest.is_empty() {
+    if rest.trim().is_empty() {
         return None;
     }
     // Scan tokens: durations may be fused ("25min", "1h") or split ("25 min",
-    // "10 minutes"); anything else accumulates as the timer name.
+    // "10 minutes", "5"), colon format ("3:30"), or "pomo".
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let mut ms_total: u64 = 0;
     let mut name_parts: Vec<String> = Vec::new();
     let mut found_any = false;
     let mut pending_number: Option<u64> = None;
     for token in tokens {
+        if token == "pomo" || token == "pomodoro" {
+            ms_total += 25 * 60_000;
+            found_any = true;
+            name_parts.push("Pomodoro".to_string());
+            continue;
+        }
+        // Support "3:30" (3 mins 30 secs) or "1:30:00"
+        if let Some((m_str, s_str)) = token.split_once(':') {
+            if let (Ok(m), Ok(s)) = (m_str.parse::<u64>(), s_str.parse::<u64>()) {
+                ms_total += (m * 60 + s) * 1000;
+                found_any = true;
+                continue;
+            }
+        }
+
         if let Some(v) = parse_duration_token(token) {
             ms_total += v;
             found_any = true;
@@ -201,13 +216,29 @@ pub fn parse_timer_phrase(line: &str) -> Option<(String, u64)> {
         }
     }
     if let Some(n) = pending_number {
-        name_parts.push(n.to_string()); // a bare trailing number is part of the name
+        if !found_any {
+            // "timer 5" -> 5 minutes by default
+            ms_total += n * 60_000;
+            found_any = true;
+        } else {
+            name_parts.push(n.to_string());
+        }
     }
     if !found_any || ms_total == 0 {
         return None;
     }
     let name = name_parts.join(" ").trim().to_string();
     Some((if name.is_empty() { "Timer".to_string() } else { name }, ms_total))
+}
+
+/// Detect phrases that stop or cancel running timers (Antinote: "timer s", "timer stop")
+pub fn is_timer_stop_phrase(line: &str) -> bool {
+    let t = line.trim().to_lowercase();
+    t == "timer s"
+        || t == "timer stop"
+        || t == "timer cancel"
+        || t == "stop timer"
+        || t == "cancel timer"
 }
 
 fn parse_duration_token(token: &str) -> Option<u64> {
@@ -244,6 +275,9 @@ mod tests {
             parse_timer_phrase("timer 1h 30m pasta water").unwrap(),
             ("pasta water".into(), 90 * 60_000)
         );
+        assert_eq!(parse_timer_phrase("timer 5").unwrap(), ("Timer".into(), 5 * 60_000));
+        assert_eq!(parse_timer_phrase("timer 3:30").unwrap(), ("Timer".into(), 210_000));
+        assert_eq!(parse_timer_phrase("timer pomo").unwrap(), ("Pomodoro".into(), 25 * 60_000));
         assert!(parse_timer_phrase("buy milk").is_none());
         assert!(parse_timer_phrase("timer").is_none());
     }

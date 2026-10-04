@@ -10,7 +10,7 @@ use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    Emitter, Manager, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, WebviewWindowBuilder,
 };
 
 struct AppState {
@@ -130,10 +130,13 @@ fn export_file_name(text: String, kind: String) -> String {
 #[tauri::command]
 fn start_timer(
     name: String,
-    duration_ms: u64,
+    duration_ms: Option<u64>,
+    #[allow(non_snake_case)]
+    durationMs: Option<u64>,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> u64 {
-    state.lock().unwrap().timers.start(&name, duration_ms)
+    let d = duration_ms.or(durationMs).unwrap_or(300_000);
+    state.lock().unwrap().timers.start(&name, d)
 }
 
 #[tauri::command]
@@ -186,6 +189,50 @@ fn block_stats(lines: Vec<String>) -> plainpad_core::mathwrap::BlockStats {
     plainpad_core::mathwrap::block_stats(&refs)
 }
 
+#[tauri::command]
+fn minimize_window(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.minimize();
+    }
+}
+
+#[tauri::command]
+fn hide_window(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+}
+
+#[tauri::command]
+fn toggle_maximize(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.is_maximized().unwrap_or(false) {
+            let _ = w.unmaximize();
+        } else {
+            let _ = w.maximize();
+        }
+    }
+}
+
+#[tauri::command]
+fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>) -> Result<bool, String> {
+    if let Some(w) = app.get_webview_window("main") {
+        let mut s = state.lock().unwrap();
+        let current = s.store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let new_val = !current;
+        let _ = w.set_always_on_top(new_val);
+        let _ = s.store.set_setting("always_on_top", serde_json::Value::Bool(new_val));
+        Ok(new_val)
+    } else {
+        Err("window not found".into())
+    }
+}
+
+#[tauri::command]
+fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
+    state.lock().unwrap().store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
 // ---------- main ----------
 
 fn main() {
@@ -213,13 +260,15 @@ fn main() {
             let x = geo.get("x").and_then(|v| v.as_f64());
             let y = geo.get("y").and_then(|v| v.as_f64());
 
+            let is_pinned = state.lock().unwrap().store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false);
+
             let mut builder = WebviewWindowBuilder::new(&handle, "main", tauri::WebviewUrl::App("index.html".into()))
                 .title("Plainpad")
                 .inner_size(w, h)
                 .decorations(false)
                 .transparent(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
+                .always_on_top(is_pinned)
+                .skip_taskbar(false)
                 .visible(true)
                 .resizable(true);
 
@@ -327,6 +376,11 @@ fn main() {
             set_geometry,
             eval_math,
             block_stats,
+            minimize_window,
+            hide_window,
+            toggle_maximize,
+            toggle_always_on_top,
+            get_always_on_top,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

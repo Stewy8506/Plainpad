@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an idea or natural language pattern for Plainpad
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Plainpad is designed around effortless natural language and keyboard speed.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem or new pattern?
+      description: A clear description of the use-case or limitation you hit.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution / Natural Language Syntax
+      description: How should Plainpad interpret or display this? (e.g. `convert 5 miles to km`, `remind me in 10m to check oven`)
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any other approaches or existing tools you considered.

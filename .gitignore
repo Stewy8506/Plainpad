@@ -1,0 +1,39 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Tauri
+/src-tauri/target/
+/src-tauri/gen/
+
+# UI build output
+/ui/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Environment
+.env
+.env.local
+
+# Plainpad data (user notes — never commit)
+plainpad-data/
+
+# Temporary
+*.tmp*
+.freebuff/

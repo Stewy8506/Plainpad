@@ -1,0 +1,562 @@
+/* ========================================================================
+   Plainpad — Design Language
+   Inspired by Antinote: dark frameless card, monospace, coral accents.
+   ======================================================================== */
+
+/* ---------- Fonts ---------- */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+/* ---------- CSS Custom Properties ---------- */
+:root {
+  /* Dark theme (default) */
+  --bg-card:        #17191d;
+  --bg-card-rgb:    23, 25, 29;
+  --bg-surface:     #1e2025;
+  --bg-hover:       #252830;
+  --bg-overlay:     rgba(23, 25, 29, 0.92);
+
+  --text-primary:   #e8e6e3;
+  --text-secondary: #8b8d93;
+  --text-muted:     #5a5c62;
+  --text-placeholder:#4a4c52;
+
+  --accent-coral:   #ff6b5e;
+  --accent-coral-dim: #cc5549;
+  --accent-teal:    #5ec4b6;
+  --accent-teal-dim:#4a9e92;
+  --accent-green:   #7ec97e;
+  --accent-green-dim:#5a9e5a;
+  --accent-yellow:  #f0c674;
+  --accent-purple:  #c78dff;
+  --accent-blue:    #6ba3ff;
+
+  --border:         rgba(255,255,255,0.06);
+  --border-hover:   rgba(255,255,255,0.12);
+
+  --radius-window:  16px;
+  --radius-btn:     8px;
+  --radius-chip:    6px;
+
+  --shadow-window:  0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-chip:    0 1px 4px rgba(0,0,0,0.3);
+
+  --font-mono:      'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+  --font-size:      14.5px;
+  --line-height:    1.65;
+
+  --chrome-height:  36px;
+  --pad-x:          24px;
+  --pad-y:          12px;
+
+  --transition:     180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light theme */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg-card:        #f5f5f0;
+    --bg-card-rgb:    245, 245, 240;
+    --bg-surface:     #eaeae5;
+    --bg-hover:       #e0e0db;
+    --bg-overlay:     rgba(245, 245, 240, 0.92);
+
+    --text-primary:   #1a1c20;
+    --text-secondary: #6b6d73;
+    --text-muted:     #9a9ca2;
+    --text-placeholder:#b0b2b8;
+
+    --accent-coral:   #e05548;
+    --accent-coral-dim: #b8443a;
+    --accent-teal:    #2a9a8e;
+    --accent-teal-dim:#238078;
+    --accent-green:   #4a8a4a;
+    --accent-green-dim:#3a6e3a;
+
+    --border:         rgba(0,0,0,0.08);
+    --border-hover:   rgba(0,0,0,0.15);
+
+    --shadow-window:  0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-chip:    0 1px 4px rgba(0,0,0,0.1);
+  }
+}
+
+[data-theme="light"] {
+  --bg-card:        #f5f5f0;
+  --bg-card-rgb:    245, 245, 240;
+  --bg-surface:     #eaeae5;
+  --bg-hover:       #e0e0db;
+  --bg-overlay:     rgba(245, 245, 240, 0.92);
+
+  --text-primary:   #1a1c20;
+  --text-secondary: #6b6d73;
+  --text-muted:     #9a9ca2;
+  --text-placeholder:#b0b2b8;
+
+  --accent-coral:   #e05548;
+  --accent-coral-dim: #b8443a;
+  --accent-teal:    #2a9a8e;
+  --accent-teal-dim:#238078;
+  --accent-green:   #4a8a4a;
+  --accent-green-dim:#3a6e3a;
+
+  --border:         rgba(0,0,0,0.08);
+  --border-hover:   rgba(0,0,0,0.15);
+
+  --shadow-window:  0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-chip:    0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* ---------- Reset & Base ---------- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-window);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-window);
+  overflow: hidden;
+}
+
+/* ---------- Drag Region ---------- */
+#drag-region {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--chrome-height);
+  -webkit-app-region: drag;
+  z-index: 100;
+}
+
+/* ---------- Chrome Bars (hover-revealed) ---------- */
+.chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--chrome-height);
+  padding: 0 var(--pad-x);
+  opacity: 0;
+  transition: opacity var(--transition);
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+.chrome-bar:hover,
+body:has(#editor:focus) .chrome-bar:hover,
+body.ctrl-held .chrome-bar {
+  opacity: 1;
+}
+
+/* Show bars faintly on focus so keyboard users know they exist */
+body:has(#editor:focus) .chrome-bar {
+  opacity: 0.2;
+}
+
+#top-bar {
+  background: linear-gradient(to bottom, var(--bg-card), transparent);
+  border-bottom: 1px solid transparent;
+}
+#top-bar:hover {
+  border-bottom-color: var(--border);
+}
+
+#bottom-bar {
+  background: linear-gradient(to top, var(--bg-card), transparent);
+  border-top: 1px solid transparent;
+}
+#bottom-bar:hover {
+  border-top-color: var(--border);
+}
+
+.chrome-btn {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  transition: all var(--transition);
+  line-height: 1;
+}
+
+.chrome-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chrome-btn.active {
+  color: var(--accent-coral);
+}
+
+.bar-spacer {
+  flex: 1;
+}
+
+.note-index {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: center;
+}
+
+.sync-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---------- Editor Container ---------- */
+#editor-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: var(--pad-y) var(--pad-x);
+  padding-right: 100px; /* leave room for right-aligned results */
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  caret-color: var(--accent-coral);
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-app-region: no-drag;
+
+  /* Thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-coral-dim) transparent;
+}
+
+#editor::placeholder {
+  color: var(--text-placeholder);
+  font-style: italic;
+}
+
+#editor::-webkit-scrollbar {
+  width: 6px;
+}
+#editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+#editor::-webkit-scrollbar-thumb {
+  background: var(--accent-coral-dim);
+  border-radius: 3px;
+}
+#editor::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-coral);
+}
+
+/* Mirror: hidden, measures line positions for overlay alignment */
+#editor-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: var(--pad-y) var(--pad-x);
+  padding-right: 100px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Overlay: positioned annotations */
+#editor-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: var(--pad-y) 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ---------- Annotation Styles ---------- */
+.anno {
+  position: absolute;
+  right: var(--pad-x);
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  pointer-events: auto;
+  transition: opacity var(--transition);
+}
+
+/* Math result: coral, right-aligned */
+.anno-math {
+  color: var(--accent-coral);
+  font-weight: 500;
+}
+.anno-math::before {
+  content: '= ';
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+/* Conversion result */
+.anno-conversion {
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+.anno-conversion::before {
+  content: '= ';
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+/* Suggestion chip */
+.anno-chip {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.anno-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+/* Timer badge */
+.anno-timer {
+  color: var(--accent-yellow);
+  font-size: 12px;
+}
+
+/* Checkbox squares rendered in overlay */
+.anno-checkbox {
+  position: absolute;
+  left: calc(var(--pad-x) - 2px);
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-muted);
+  border-radius: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.anno-checkbox.checked {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+.anno-checkbox.checked::after {
+  content: '✓';
+  color: var(--bg-card);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Mode word label (first line: "math", "code: bash") */
+.anno-mode {
+  position: absolute;
+  left: var(--pad-x);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+}
+.anno-mode.math { color: var(--accent-green); }
+.anno-mode.code { color: var(--accent-coral); }
+.anno-mode.list { color: var(--accent-blue); }
+.anno-mode.sum  { color: var(--accent-teal); }
+.anno-mode.calcs { color: var(--accent-purple); }
+.anno-mode.paste { color: var(--accent-blue); }
+
+/* Title styling: slightly brighter */
+.title-line {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ---------- Stats line ---------- */
+.anno-stats {
+  color: var(--accent-teal);
+  font-size: 12px;
+  font-weight: 400;
+}
+.anno-stats::before {
+  content: 'Total: ';
+  color: var(--text-muted);
+}
+
+/* ---------- Timer Display ---------- */
+#timer-display {
+  position: fixed;
+  bottom: calc(var(--chrome-height) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--accent-yellow);
+  box-shadow: var(--shadow-chip);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity var(--transition);
+}
+
+#timer-display .timer-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+#timer-display .timer-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Settings Panel ---------- */
+#settings-panel {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--transition);
+}
+
+.settings-content {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.settings-content h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.setting-group {
+  margin-bottom: 16px;
+}
+
+.setting-group label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.setting-group input[type="text"],
+.setting-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.setting-group input[type="text"]:focus,
+.setting-group select:focus {
+  border-color: var(--accent-coral);
+}
+
+.setting-group input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: var(--accent-coral);
+}
+
+.settings-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 16px;
+}
+
+/* ---------- Hidden helper ---------- */
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: rgba(255, 107, 94, 0.25);
+  color: inherit;
+}
+
+/* ---------- Focus rings for a11y ---------- */
+.chrome-btn:focus-visible {
+  outline: 2px solid var(--accent-coral);
+  outline-offset: 2px;
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
+/* ---------- Comment lines (// marker) ---------- */
+/* Applied via JS class on lines starting with // */
+
+/* ---------- Code-mode monospace tint ---------- */
+body.code-mode #editor {
+  background: rgba(var(--bg-card-rgb), 0.3);
+}

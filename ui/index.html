@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plainpad</title>
+  <meta name="description" content="Plainpad — the scratchpad where you just write, and the app works out the rest." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Frameless window drag region -->
+  <div id="drag-region"></div>
+
+  <!-- Top chrome bar: note navigation (hover-revealed) -->
+  <div id="top-bar" class="chrome-bar">
+    <button id="btn-prev" class="chrome-btn" title="Previous note (Ctrl+←)">‹</button>
+    <span id="note-index" class="note-index">1/1</span>
+    <button id="btn-next" class="chrome-btn" title="Next note (Ctrl+→)">›</button>
+    <div class="bar-spacer"></div>
+    <button id="btn-pin" class="chrome-btn" title="Pin note">📌</button>
+    <button id="btn-plain" class="chrome-btn" title="Plain mode (Ctrl+P)">◉</button>
+  </div>
+
+  <!-- Main editor area -->
+  <div id="editor-container">
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+      placeholder="Just start typing…"></textarea>
+    <!-- Hidden mirror for line measurement -->
+    <div id="editor-mirror" aria-hidden="true"></div>
+    <!-- Overlay for annotations (math results, chips, checkboxes) -->
+    <div id="editor-overlay" aria-hidden="true"></div>
+  </div>
+
+  <!-- Timer display (shown when timers are active) -->
+  <div id="timer-display" class="hidden"></div>
+
+  <!-- Bottom chrome bar: actions (hover-revealed) -->
+  <div id="bottom-bar" class="chrome-bar">
+    <button id="btn-new" class="chrome-btn" title="New note (Ctrl+N)">＋</button>
+    <button id="btn-delete" class="chrome-btn" title="Delete note (Ctrl+Shift+D)">🗑</button>
+    <button id="btn-export" class="chrome-btn" title="Export (Ctrl+Shift+E)">📤</button>
+    <div class="bar-spacer"></div>
+    <span id="sync-status" class="sync-status"></span>
+    <button id="btn-settings" class="chrome-btn" title="Settings">⚙</button>
+  </div>
+
+  <!-- Settings panel (hidden by default) -->
+  <div id="settings-panel" class="hidden">
+    <div class="settings-content">
+      <h2>Settings</h2>
+      <div class="setting-group">
+        <label>Hotkey</label>
+        <input id="setting-hotkey" type="text" value="Alt+A" readonly />
+      </div>
+      <div class="setting-group">
+        <label>Theme</label>
+        <select id="setting-theme">
+          <option value="system">Follow system</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <label>
+          <input id="setting-global-plain" type="checkbox" />
+          Global plain mode (disable intelligence)
+        </label>
+      </div>
+      <button id="btn-close-settings" class="chrome-btn settings-close">✕</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

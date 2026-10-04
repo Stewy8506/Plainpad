@@ -233,6 +233,9 @@ async function loadNote(index: number): Promise<void> {
   editor.value = currentText;
   updateBackdrop();
 
+  activeAnnoCache.clear();
+  overlay.innerHTML = '';
+  skipKineticAnimation = true;
   updateNoteUI();
   scheduleAnalyze();
 }
@@ -273,6 +276,7 @@ async function createNewNote(): Promise<void> {
   notes.unshift({ id, title: '', mtime_ms: Date.now(), pinned: false, plain: false });
   currentIndex = 0;
   currentPlain = false;
+  activeAnnoCache.clear();
   overlay.innerHTML = '';
   updateNoteUI();
   editor.focus();
@@ -324,7 +328,7 @@ function updateNoteUI(): void {
 
 function scheduleAnalyze(): void {
   if (analyzeTimeout) clearTimeout(analyzeTimeout);
-  analyzeTimeout = setTimeout(() => runAnalysis(), 50);
+  analyzeTimeout = setTimeout(() => runAnalysis(), 35);
 }
 
 async function runAnalysis(): Promise<void> {
@@ -332,7 +336,10 @@ async function runAnalysis(): Promise<void> {
   const plain = currentPlain || globalPlain;
   const analysis = await invoke<Analysis>('analyze_note', { text, plain });
   if (!analysis) {
-    overlay.innerHTML = '';
+    for (const child of Array.from(overlay.children) as HTMLElement[]) {
+      triggerExit(child);
+    }
+    activeAnnoCache.clear();
     return;
   }
 
@@ -408,9 +415,95 @@ function updateBackdrop(): void {
   backdrop.innerHTML = resultHtml;
 }
 
+// Cache of rendered annotation values to prevent re-animating already-settled lines
+let activeAnnoCache = new Map<string, string>();
+// Suppress kinetic animations during app startup, note loading, and note switching
+let skipKineticAnimation = false;
+
+function renderKineticContent(parent: HTMLElement, prefix: string, text: string, isNew: boolean): void {
+  if (!isNew) {
+    if (prefix) {
+      const p = document.createElement('span');
+      p.className = 'anno-prefix';
+      p.textContent = prefix;
+      parent.appendChild(p);
+    }
+    parent.appendChild(document.createTextNode(text));
+    return;
+  }
+
+  const container = document.createElement('span');
+  container.className = 'kinetic-container';
+  let wordIndex = 0;
+
+  if (prefix) {
+    const p = document.createElement('span');
+    p.className = 'kinetic-word anno-prefix';
+    p.style.setProperty('--word-index', String(wordIndex++));
+    p.textContent = prefix;
+    container.appendChild(p);
+  }
+
+  // Tokenize by whitespace so each word receives fluid kinetic stagger
+  const tokens = text.split(/(\s+)/);
+  for (const token of tokens) {
+    if (token.trim().length === 0) {
+      container.appendChild(document.createTextNode(token));
+    } else {
+      const wSpan = document.createElement('span');
+      wSpan.className = 'kinetic-word';
+      wSpan.style.setProperty('--word-index', String(wordIndex++));
+      wSpan.textContent = token;
+      container.appendChild(wSpan);
+    }
+  }
+  parent.appendChild(container);
+}
+
+function triggerExit(el: HTMLElement): void {
+  if (el.classList.contains('kinetic-exiting')) return;
+
+  const rawKey = el.dataset.annoKey || '';
+  const baseKey = rawKey.split(':exiting')[0];
+  const exitingPrefix = `${baseKey}:exiting`;
+
+  // If there's an older exiting element on this same line, remove it immediately
+  // so rapid backspacing doesn't stack multiple ghost annotations.
+  if (baseKey && el.parentNode) {
+    for (const child of Array.from(el.parentNode.children) as HTMLElement[]) {
+      if (child !== el && child.dataset.annoKey?.startsWith(exitingPrefix)) {
+        child.remove();
+      }
+    }
+  }
+
+  el.dataset.annoKey = `${baseKey}:exiting:${Date.now()}`;
+  el.classList.add('kinetic-exiting');
+  el.style.pointerEvents = 'none';
+
+  // Stop child entrance animations so they don't fight the exit or fire rogue animationend events
+  const animChildren = el.querySelectorAll<HTMLElement>('.kinetic-word, .kinetic-reveal-chip');
+  for (const child of Array.from(animChildren)) {
+    child.style.animation = 'none';
+  }
+
+  const cleanup = () => {
+    if (el.parentNode) {
+      el.remove();
+    }
+  };
+
+  el.addEventListener('animationend', (e: AnimationEvent) => {
+    if (e.target === el) {
+      cleanup();
+    }
+  }, { once: true });
+
+  setTimeout(cleanup, 260);
+}
+
 function renderOverlay(analysis: Analysis, text: string): void {
   const lines = text.split('\n');
-  overlay.innerHTML = '';
 
   // Sync scroll position with textarea
   overlay.style.top = `-${editor.scrollTop}px`;
@@ -430,6 +523,17 @@ function renderOverlay(analysis: Analysis, text: string): void {
     textSpans.push(span);
   }
 
+  // Map existing active elements currently in the DOM
+  const existingEls = new Map<string, HTMLElement>();
+  for (const child of Array.from(overlay.children) as HTMLElement[]) {
+    const key = child.dataset.annoKey;
+    if (key && !child.classList.contains('kinetic-exiting')) {
+      existingEls.set(key, child);
+    }
+  }
+
+  const nextAnnoCache = new Map<string, string>();
+
   for (const anno of analysis.annotations) {
     if (anno.line >= lineEls.length) continue;
     const lineEl = lineEls[anno.line];
@@ -445,27 +549,53 @@ function renderOverlay(analysis: Analysis, text: string): void {
     const maxLeft = Math.max(padX, editor.clientWidth - 130);
     const left = Math.min(padX + textWidth + 10, maxLeft);
 
+    const annoKey = `${anno.line}:${anno.kind}`;
+    const annoValue = String(anno.value || anno.chip || '');
+    const isNew = !skipKineticAnimation && (activeAnnoCache.get(annoKey) !== annoValue);
+    nextAnnoCache.set(annoKey, annoValue);
+
+    const prevEl = existingEls.get(annoKey);
+
+    if (!isNew && prevEl) {
+      // Unchanged: update layout position in case typing on previous lines shifted vertical line offsets
+      prevEl.style.top = `${anno.kind === 'checklist' ? top + 2 : top}px`;
+      if (anno.kind !== 'checklist') {
+        prevEl.style.left = `${left}px`;
+      }
+      existingEls.delete(annoKey);
+      continue;
+    }
+
+    // If an old element with this key was already in the DOM but its value changed, smoothly exit the old one
+    if (prevEl) {
+      triggerExit(prevEl);
+      existingEls.delete(annoKey);
+    }
+
+    let el: HTMLElement | null = null;
+
     if (anno.kind === 'math' && anno.confidence >= 0.85 && anno.value) {
-      const el = document.createElement('div');
+      el = document.createElement('div');
       const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-math${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
-      el.textContent = formatNumber(anno.value);
+      const prefix = hasTrailingEquals ? '' : '= ';
+      const formatted = formatNumber(anno.value);
+      renderKineticContent(el, prefix, formatted, isNew);
       el.title = anno.why;
-      overlay.appendChild(el);
     } else if (anno.kind === 'conversion' && anno.confidence >= 0.85 && anno.value) {
-      const el = document.createElement('div');
+      el = document.createElement('div');
       const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-conversion${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
-      el.textContent = anno.value;
+      const prefix = hasTrailingEquals ? '' : '= ';
+      renderKineticContent(el, prefix, anno.value, isNew);
       el.title = anno.why;
-      overlay.appendChild(el);
     } else if (anno.kind === 'timer') {
-      const el = document.createElement('div');
-      el.className = 'anno anno-timer-chip';
+      el = document.createElement('div');
+      el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
       const isRunning = activeTimers.some((t) => !t.fired);
@@ -476,42 +606,62 @@ function renderOverlay(analysis: Analysis, text: string): void {
         el.title = 'Click to stop timer';
         el.addEventListener('click', () => stopActiveTimer());
       } else {
-        el.innerHTML = `${clockSvg}Start ${anno.value} (Enter)`;
+        const iconSpan = document.createElement('span');
+        iconSpan.innerHTML = clockSvg;
+        el.appendChild(iconSpan);
+        const timerText = `Start ${anno.value} (Enter)`;
+        el.appendChild(document.createTextNode(timerText));
         el.title = 'Click or press Enter to start timer';
         el.addEventListener('click', () => startTimerFromLine(anno.line));
       }
-      overlay.appendChild(el);
     } else if (anno.kind === 'timer_stop') {
-      const el = document.createElement('div');
-      el.className = 'anno anno-timer-chip stop';
+      el = document.createElement('div');
+      el.className = `anno anno-timer-chip stop${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
       const stopSvg = `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>`;
-      el.innerHTML = `${stopSvg}Stop timer (Enter)`;
+      const iconSpan = document.createElement('span');
+      iconSpan.innerHTML = stopSvg;
+      el.appendChild(iconSpan);
+      el.appendChild(document.createTextNode('Stop timer (Enter)'));
       el.title = 'Click or press Enter to stop active timer';
       el.addEventListener('click', () => stopActiveTimer());
-      overlay.appendChild(el);
     } else if (anno.kind === 'checklist' && (lineText.startsWith('[ ] ') || lineText.startsWith('[x] ') || lineText.startsWith('[X] '))) {
-      // Render checkbox overlay for already converted checkbox lines
       const isChecked = lineText.startsWith('[x] ') || lineText.startsWith('[X] ');
-      const el = document.createElement('div');
+      el = document.createElement('div');
       el.className = `anno-checkbox${isChecked ? ' checked' : ''}`;
       el.style.top = `${top + 2}px`;
       el.dataset.line = String(anno.line);
       el.addEventListener('click', () => toggleCheckbox(anno.line));
-      overlay.appendChild(el);
     } else if (anno.chip) {
-      const el = document.createElement('div');
-      el.className = 'anno anno-chip';
+      el = document.createElement('div');
+      el.className = `anno anno-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
       el.dataset.line = String(anno.line);
       el.textContent = anno.chip;
       el.title = anno.why;
       el.addEventListener('click', () => acceptChip(anno.line, lines[anno.line] || ''));
+    }
+
+    if (el) {
+      el.dataset.annoKey = annoKey;
       overlay.appendChild(el);
     }
   }
+
+  // Any remaining elements in existingEls were invalidated (e.g. user backspaced)!
+  // Gracefully animate them out with Apple-style kinetic exit blur
+  for (const [, elToExit] of existingEls) {
+    if (skipKineticAnimation) {
+      elToExit.remove();
+    } else {
+      triggerExit(elToExit);
+    }
+  }
+
+  activeAnnoCache = nextAnnoCache;
+  skipKineticAnimation = false;
 }
 
 function formatNumber(value: string): string {
@@ -924,6 +1074,7 @@ async function togglePlainMode(): Promise<void> {
   currentPlain = !currentPlain;
   await invoke('set_plain', { id: currentId, plain: currentPlain });
   updateNoteUI();
+  skipKineticAnimation = true;
   scheduleAnalyze();
 }
 

@@ -59,6 +59,19 @@
   --pad-y:          12px;
 
   --transition:     180ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Kinetic Blur Reveal Parameters (Apple Marketing Motion Style) */
+  --kinetic-blur:          20px;
+  --kinetic-y:             40px;
+  --kinetic-duration:      480ms;
+  --kinetic-stagger:       35ms;
+  --kinetic-ease:          cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* Kinetic Blur Exit Parameters (Backspace & Removal Animation) */
+  --kinetic-exit-duration: 220ms;
+  --kinetic-exit-blur:     16px;
+  --kinetic-exit-y:        -14px;
+  --kinetic-exit-ease:     cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Light theme */
@@ -469,6 +482,8 @@ body.ctrl-held #bottom-bar {
   line-height: var(--line-height);
   white-space: nowrap;
   pointer-events: auto;
+  overflow: visible !important;
+  contain: none !important;
   transition: opacity var(--transition);
 }
 
@@ -477,14 +492,7 @@ body.ctrl-held #bottom-bar {
   color: var(--anno-math);
   font-weight: 500;
   opacity: 0.92;
-}
-.anno-math::before {
-  content: '= ';
-  color: var(--anno-prefix);
-  font-weight: 300;
-}
-.anno-math.has-equals::before {
-  content: '';
+  overflow: visible !important;
 }
 
 /* Conversion result: muted desaturated sage */
@@ -492,14 +500,153 @@ body.ctrl-held #bottom-bar {
   color: var(--anno-conv);
   font-weight: 500;
   opacity: 0.92;
+  overflow: visible !important;
 }
-.anno-conversion::before {
-  content: '= ';
+
+/* Kinetic Prefix styling */
+.anno-prefix {
   color: var(--anno-prefix);
   font-weight: 300;
+  margin-right: 0.25em;
+  display: inline-block;
 }
-.anno-conversion.has-equals::before {
-  content: '';
+
+/* ========================================================================
+   Apple Marketing Style Kinetic Blur-Fade Reveal Animation
+   ======================================================================== */
+
+.kinetic-container {
+  display: inline-flex;
+  align-items: baseline;
+  overflow: visible !important;
+  white-space: pre;
+}
+
+.kinetic-word {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform, opacity, filter;
+  animation: kineticWordReveal var(--kinetic-duration) var(--kinetic-ease) both;
+  animation-delay: calc(var(--word-index, 0) * var(--kinetic-stagger));
+  backface-visibility: hidden;
+  transform-origin: center bottom;
+}
+
+@keyframes kineticWordReveal {
+  0% {
+    opacity: 0;
+    filter: blur(var(--kinetic-blur));
+    transform: translate3d(0, var(--kinetic-y), 0);
+  }
+  30% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Whole chip / block kinetic reveal */
+.kinetic-reveal-chip {
+  will-change: transform, opacity, filter;
+  animation: kineticChipReveal var(--kinetic-duration) var(--kinetic-ease) both;
+  backface-visibility: hidden;
+  transform-origin: center bottom;
+}
+
+@keyframes kineticChipReveal {
+  0% {
+    opacity: 0;
+    filter: blur(var(--kinetic-blur));
+    transform: translate3d(0, var(--kinetic-y), 0);
+  }
+  35% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Kinetic Exit (Backspace / Removal Animation) */
+.kinetic-exiting {
+  pointer-events: none !important;
+  transition: none !important;
+  overflow: visible !important;
+  contain: none !important;
+  will-change: transform, opacity, filter !important;
+  animation: kineticExit var(--kinetic-exit-duration) var(--kinetic-exit-ease) forwards !important;
+  transform-origin: center top !important;
+}
+
+.kinetic-exiting,
+.kinetic-exiting * {
+  pointer-events: none !important;
+}
+
+.kinetic-exiting .kinetic-word,
+.kinetic-exiting .kinetic-reveal-chip {
+  animation: none !important;
+}
+
+@keyframes kineticExit {
+  0% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  35% {
+    opacity: 0.55;
+    filter: blur(calc(var(--kinetic-exit-blur) * 0.4));
+  }
+  100% {
+    opacity: 0;
+    filter: blur(var(--kinetic-exit-blur));
+    transform: translate3d(0, var(--kinetic-exit-y), 0) scale(0.95);
+  }
+}
+
+/* ACCESSIBILITY OVERRIDE (Requirement 4)
+   Bypass blur and position translations completely, substituting a clean 150ms opacity fade */
+@media (prefers-reduced-motion: reduce) {
+  .kinetic-word,
+  .kinetic-reveal-chip,
+  .anno-chip,
+  .anno-timer-chip {
+    animation: reducedMotionFade 150ms ease-out both !important;
+    filter: none !important;
+    transform: none !important;
+    will-change: opacity !important;
+  }
+
+  .kinetic-exiting {
+    animation: reducedMotionExit 100ms ease-in forwards !important;
+    filter: none !important;
+    transform: none !important;
+    will-change: opacity !important;
+  }
+}
+
+@keyframes reducedMotionFade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes reducedMotionExit {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Suggestion chip */

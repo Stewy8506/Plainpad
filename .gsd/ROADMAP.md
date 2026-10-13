@@ -6,14 +6,14 @@ updated: 2026-10-13T20:14:00+05:30
 
 # Roadmap
 
-> **Current Phase:** 3 - Natural-Language Math & 6-Domain Unit Conversion Engine
+> **Current Phase:** 4 - Natural-Language Sentence Triggers & AutoPaste
 > **Status:** ready for planning
 
 ## Must-Haves (from SPEC)
 
 - [x] SQLite persistence matching Antinote Core Data Model 9 (5 entities, 17 Note properties)
 - [x] 9 Slotted Notes Greek-god system (Hermes through Zeus) with bottom bar and `Ctrl+1..9` hotkeys
-- [ ] Natural-language math engine supporting fractions, decimals, scientific notation, trig modes, and 6 conversion domains
+- [x] Natural-language math engine supporting fractions, decimals, scientific notation, trig modes, and 6 conversion domains
 - [ ] Natural-language sentence trigger engine (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`)
 - [ ] Timer and Pomodoro subsystem with circular visual progress and native audio chimes (`backtowork`, `countdowndone`, `workdone`)
 - [ ] Rich editor capabilities: interactive checkboxes (`- [ ]`), list autocompletion, Antilink URL pills, rounded syntax-highlighted code blocks, and modal Vim mode
@@ -47,14 +47,14 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 3: Natural-Language Math & 6-Domain Unit Conversion Engine
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Provide mathematical parsing for fractions, decimals, exponents, scientific notation, trig modes (`degrees` vs `radians`), and complete bidirectional unit conversion across Distance, Area, Mass/Weight, Volume, Temperature, and Currency (160+ currencies with background cache).  
 **Depends on:** Phase 1  
 **Requirements:** REQ-08, REQ-09, REQ-10, REQ-11  
 **Plans:**
-- [ ] Plan 3.1: Math tokenizer with mixed fractions, exponents, implicit multiplication, and angle modes
-- [ ] Plan 3.2: 5 physical unit conversion domains (Distance, Area, Mass, Volume, Temperature) with regional aliases
-- [ ] Plan 3.3: Currency exchange engine with 160+ currencies, cache sync, thousand separators, and decimal precision
+- [x] Plan 3.1: Math tokenizer with mixed fractions, exponents, implicit multiplication, and angle modes
+- [x] Plan 3.2: 5 physical unit conversion domains (Distance, Area, Mass, Volume, Temperature) with regional aliases
+- [x] Plan 3.3: Currency exchange engine with 160+ currencies, cache sync, thousand separators, and decimal precision
 
 ---
 
@@ -121,7 +121,7 @@ updated: 2026-10-13T20:14:00+05:30
 |---|---|---|---|---|
 | **Phase 1** | SQLite Storage & Core Data Model 9 | ✅ Complete | 3/3 | 100% |
 | **Phase 2** | Slotted Notes (Greek Gods) | ✅ Complete | 2/2 | 100% |
-| **Phase 3** | Math & 6-Domain Unit Conversions | ⬜ Not Started | 0/3 | 0% |
+| **Phase 3** | Math & 6-Domain Unit Conversions | ✅ Complete | 3/3 | 100% |
 | **Phase 4** | Sentence Triggers & AutoPaste | ⬜ Not Started | 0/2 | 0% |
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ⬜ Not Started | 0/2 | 0% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ⬜ Not Started | 0/3 | 0% |
@@ -136,7 +136,7 @@ updated: 2026-10-13T20:14:00+05:30
 |---|---|---|---|
 | Phase 1 | 2026-10-13 | 2026-10-13 | ~45m |
 | Phase 2 | 2026-10-13 | 2026-10-13 | ~30m |
-| Phase 3 | — | — | — |
+| Phase 3 | 2026-10-13 | 2026-10-13 | ~45m |
 | Phase 4 | — | — | — |
 | Phase 5 | — | — | — |
 | Phase 6 | — | — | — |

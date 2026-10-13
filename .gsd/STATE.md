@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-13T20:56:00+05:30
+updated: 2026-10-13T21:58:00+05:30
 ---
 
 # Project State
@@ -7,25 +7,26 @@ updated: 2026-10-13T20:56:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 3 - Natural-Language Math & 6-Domain Unit Conversion Engine  
+**Phase:** 4 - Natural-Language Sentence Triggers & AutoPaste  
 **Status:** ready for planning  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1 & 2 complete: 5/5 plans; Phase 3 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-07 Complete: 7/30)  
-**Phase 2 Verification:** `.gsd/phases/2/VERIFICATION.md` (Status: PASS, 9/9 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1, 2, 3 complete: 8/8 plans; Phase 4 next)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-11 Complete: 11/30)  
+**Phase 3 Verification:** `.gsd/phases/3/VERIFICATION.md` (Status: PASS, 15/15 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and verification of **Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation**:
-  - `01-PLAN.md`: Implemented 9-slot Greek deity persistent carousel (`Hermes` to `Zeus`), idempotence, slot invariance rules (immunity from deletion / The Void), and Tauri IPC queries.
-  - `02-PLAN.md`: Implemented `SlottedNotesBottomBar` with 9 dot/pill indicators, deity tooltips, active slot styling, direct jump shortcuts (`Ctrl+1..9` / `Cmd+1..9`), and cycle navigation (`Ctrl+Tab` / `Ctrl+Shift+Tab`).
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 9 empirical verification points with 4 new slotted notes integration tests and clean TypeScript compilation.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-05 through REQ-07 Complete.
+- Completed full execution and verification of **Phase 3: Natural-Language Math & 6-Domain Unit Conversion Engine**:
+  - `01-PLAN.md`: Implemented preprocessor for mixed fractions (`1 1/2`), exponents (`2^8`, `2**8`), scientific notation, implicit multiplication, and configurable angle modes (`degrees` vs `radians`).
+  - `02-PLAN.md`: Implemented dedicated 5-domain physical conversion engine (`Distance`, `Area` with `cuerda`/`dunam`/`bigha`, `Mass` with `stones`/`long ton`, `Volume` with UK/US variants, and affine `Temperature`).
+  - `03-PLAN.md`: Implemented currency exchange engine supporting 160+ fiat and cryptocurrencies, non-blocking background rate updater with caching and manual overrides, configurable thousands grouping and decimal precision.
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 15 empirical verification points across 93 passing unit & integration tests.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-08 through REQ-11 Complete.
 
 ## Next Steps
 
-1. Plan Phase 3: Natural-Language Math & 6-Domain Unit Conversion Engine (`/plan 3`).
-2. Execute Phase 3 plans (math tokenizer with fractions/exponents/angle modes, 5 physical unit domains, 160+ currency sync engine).
-3. Verify Phase 3 deliverables against REQ-08 through REQ-11.
+1. Plan Phase 4: Natural-Language Sentence Triggers & AutoPaste (`/plan 4`).
+2. Execute Phase 4 plans (paragraph/list trigger evaluator for `sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`, trigger alias mapping, and AutoPaste continuous clipboard capture).
+3. Verify Phase 4 deliverables against REQ-12 through REQ-14.
 
 ## Active Decisions
 
@@ -34,6 +35,7 @@ updated: 2026-10-13T20:56:00+05:30
 | Target reference | Antinote v2.1.0 (`/Applications/Antinote.app`) | 2026-10-13 | All phases |
 | Storage engine | Embedded SQLite (`rusqlite` bundled) matching Core Data Model 9 | 2026-10-13 | Phase 1, Phase 2, Phase 8 |
 | Slotted note keys | Hermes(0) to Zeus(8), `Ctrl+1..9` jump, `Ctrl+Tab` cycle | 2026-10-13 | Phase 2, UI |
+| Math & Conversion Engine | Fend + custom preprocessor & affine 5-domain unit system | 2026-10-13 | Phase 3, Phase 4 |
 | Planning methodology | GSD (SPEC → PLAN → EXECUTE → VERIFY → COMMIT) | 2026-10-13 | Entire project lifecycle |
 
 ## Blockers

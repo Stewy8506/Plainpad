@@ -1,5 +1,6 @@
 pub mod file;
 pub mod notes;
+pub mod relational;
 pub mod schema;
 pub mod void;
 

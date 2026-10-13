@@ -19,6 +19,8 @@ struct AppState {
     timers: plainpad_core::timers::TimerEngine,
 }
 
+type AppStateLock = Mutex<AppState>;
+
 fn data_dir() -> PathBuf {
     dirs_next().unwrap_or_else(|| std::env::current_dir().unwrap().join("plainpad-data"))
 }
@@ -577,6 +579,111 @@ fn get_rates_info() -> plainpad_core::currency::RatesInfo {
 }
 
 #[tauri::command]
+fn get_currency_rates_info() -> plainpad_core::currency::RatesInfo {
+    plainpad_core::currency::get_rates_info()
+}
+
+#[tauri::command]
+fn sync_currency_rates(
+    app: AppHandle,
+    state: tauri::State<'_, AppStateLock>,
+) -> Result<plainpad_core::currency::RatesInfo, String> {
+    let dir = data_dir();
+    let rates_path = dir.join("state/exchange_rates.json");
+    let store = state.lock().unwrap().store.clone();
+    let app_clone = app.clone();
+
+    // Detached thread for non-blocking fetch (NFR-02)
+    std::thread::spawn(move || {
+        match fetch_and_save_rates(&rates_path) {
+            Ok(info) => {
+                let now_str = chrono::Utc::now().to_rfc3339();
+                let _ = store.set_setting(
+                    "lastCurrencyUpdateDate",
+                    serde_json::Value::String(now_str),
+                );
+                let _ = app_clone.emit("rates-updated", &info);
+            }
+            Err(e) => {
+                eprintln!("[plainpad] Background rate sync failed: {}", e);
+            }
+        }
+    });
+
+    Ok(plainpad_core::currency::get_rates_info())
+}
+
+#[tauri::command]
+fn set_currency_format_settings(
+    state: tauri::State<'_, AppStateLock>,
+    thousands_sep: String,
+    decimal_sep: String,
+    decimal_points: usize,
+) -> Result<(), String> {
+    let store = state.lock().unwrap().store.clone();
+    store
+        .set_setting("thousandsSeparator", serde_json::Value::String(thousands_sep.clone()))
+        .map_err(|e| e.to_string())?;
+    store
+        .set_setting("decimalSeparator", serde_json::Value::String(decimal_sep.clone()))
+        .map_err(|e| e.to_string())?;
+    store
+        .set_setting("numberOfDecimalPoints", serde_json::json!(decimal_points))
+        .map_err(|e| e.to_string())?;
+
+    let cfg = plainpad_core::currency::CurrencyFormatConfig {
+        thousands_separator: thousands_sep,
+        decimal_separator: decimal_sep,
+        decimal_points,
+        use_thousands_separator: true,
+    };
+    plainpad_core::currency::set_format_config(cfg);
+    Ok(())
+}
+
+#[tauri::command]
+fn set_manual_currency_rate(
+    state: tauri::State<'_, AppStateLock>,
+    code: String,
+    rate: f64,
+) -> Result<(), String> {
+    let store = state.lock().unwrap().store.clone();
+    let mut current_map = match store.get_setting("_manualCurrencyRates") {
+        Ok(Some(serde_json::Value::Object(map))) => map,
+        _ => serde_json::Map::new(),
+    };
+    let upper = code.to_uppercase();
+    if rate <= 0.0 {
+        current_map.remove(&upper);
+        plainpad_core::currency::remove_manual_rate(&upper);
+    } else {
+        current_map.insert(upper.clone(), serde_json::json!(rate));
+        plainpad_core::currency::set_manual_rate(&upper, rate);
+    }
+    store
+        .set_setting(
+            "_manualCurrencyRates",
+            serde_json::Value::Object(current_map),
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn convert_currency_ipc(amount: f64, from: String, to: String) -> Result<String, String> {
+    let engine = plainpad_core::currency::global_engine();
+    let lock = engine.read().map_err(|e| e.to_string())?;
+    let canonical_from = plainpad_core::currency::canonicalize_currency(&from)
+        .unwrap_or(&from);
+    let canonical_to = plainpad_core::currency::canonicalize_currency(&to)
+        .unwrap_or(&to);
+    let converted = lock
+        .convert(amount, canonical_from, canonical_to)
+        .ok_or_else(|| format!("Cannot convert from {} to {}", from, to))?;
+    Ok(plainpad_core::currency::format_converted(converted, canonical_to))
+}
+
+#[tauri::command]
 fn refresh_rates_now(app: AppHandle) -> Result<plainpad_core::currency::RatesInfo, String> {
     let dir = data_dir();
     let rates_path = dir.join("state/exchange_rates.json");
@@ -787,6 +894,13 @@ fn main() {
                 });
             }
 
+            // Restore currency preferences and manual rates from SQLite app_state
+            {
+                let s = app.state::<Mutex<AppState>>();
+                let store = s.lock().unwrap().store.clone();
+                plainpad_core::currency::init_from_store_settings(&store);
+            }
+
             // Currency rates: initial load from disk cache if present
             let rates_path = dir.join("state/exchange_rates.json");
             let mut needs_refresh = true;
@@ -867,6 +981,11 @@ fn main() {
             toggle_always_on_top,
             get_always_on_top,
             get_rates_info,
+            get_currency_rates_info,
+            sync_currency_rates,
+            set_currency_format_settings,
+            set_manual_currency_rate,
+            convert_currency_ipc,
             refresh_rates_now,
             open_settings_window,
             get_data_dir_path,

@@ -247,6 +247,78 @@ pub fn get_rates_info() -> RatesInfo {
     lock.info()
 }
 
+/// Sync rates from a URL, local file path (file://), or raw JSON string.
+pub fn sync_rates_from_url(url: &str) -> Result<RatesInfo, String> {
+    let cleaned = url.strip_prefix("file://").unwrap_or(url);
+    if let Ok(content) = std::fs::read_to_string(cleaned) {
+        if update_rates(&content) {
+            return Ok(get_rates_info());
+        } else {
+            return Err("Failed to parse rates JSON from file".into());
+        }
+    }
+    if update_rates(url) {
+        return Ok(get_rates_info());
+    }
+    Err(format!("Could not load currency rates from: {}", url))
+}
+
+/// Initialize currency formatting preferences and manual rate overrides from SQLite app_state settings.
+pub fn init_from_store_settings(store: &crate::store::SqliteStore) {
+    let mut config = get_format_config();
+
+    if let Ok(Some(val)) = store.get_setting("thousandsSeparator") {
+        if let Some(sep) = val.as_str() {
+            config.thousands_separator = sep.to_string();
+            if sep == "." {
+                config.decimal_separator = ",".to_string();
+            } else if sep == "," || sep == " " {
+                config.decimal_separator = ".".to_string();
+            }
+        }
+    }
+
+    if let Ok(Some(val)) = store.get_setting("decimalSeparator") {
+        if let Some(sep) = val.as_str() {
+            config.decimal_separator = sep.to_string();
+        }
+    }
+
+    if let Ok(Some(val)) = store.get_setting("numberOfDecimalPoints") {
+        if let Some(n) = val.as_u64() {
+            config.decimal_points = n as usize;
+        } else if let Some(s) = val.as_str() {
+            if let Ok(n) = s.parse::<usize>() {
+                config.decimal_points = n;
+            }
+        }
+    }
+
+    if let Ok(Some(val)) = store.get_setting("useThousandsSeparator") {
+        if let Some(b) = val.as_bool() {
+            config.use_thousands_separator = b;
+        }
+    } else if let Ok(Some(val)) = store.get_setting("_useThousandSeparatorsStorage") {
+        if let Some(b) = val.as_bool() {
+            config.use_thousands_separator = b;
+        }
+    }
+
+    set_format_config(config);
+
+    if let Ok(Some(val)) = store.get_setting("_manualCurrencyRates") {
+        if let Some(obj) = val.as_object() {
+            let mut manual = HashMap::new();
+            for (k, v) in obj {
+                if let Some(rate) = v.as_f64() {
+                    manual.insert(k.clone(), rate);
+                }
+            }
+            load_manual_rates(manual);
+        }
+    }
+}
+
 pub fn group_integer_digits(int_str: &str, sep: &str) -> String {
     let chars: Vec<char> = int_str.chars().collect();
     let len = chars.len();

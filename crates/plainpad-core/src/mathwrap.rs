@@ -558,11 +558,34 @@ fn rewrite_direct_trig_degrees(expr: &str) -> String {
 
 fn rewrite_inverse_trig_degrees(expr: &str) -> String {
     let lower = expr.to_lowercase();
-    let has_inverse = lower.contains("asin") || lower.contains("acos") || lower.contains("atan");
-    if !has_inverse {
+    if lower.contains(" in ") || lower.contains(" to ") {
         return expr.to_string();
     }
-    if lower.contains(" in ") || lower.contains(" to ") {
+
+    let chars: Vec<char> = lower.chars().collect();
+    let len = chars.len();
+    let mut has_inverse = false;
+
+    for &func in &["asin", "acos", "atan"] {
+        let flen = func.len();
+        let mut idx = 0;
+        while let Some(rel) = lower[idx..].find(func) {
+            let start = idx + rel;
+            let end = start + flen;
+            let valid_suffix = end >= len || (!chars[end].is_alphabetic() && chars[end] != '_');
+            let valid_prefix = start == 0 || (!chars[start - 1].is_alphanumeric() && chars[start - 1] != '_');
+            if valid_suffix && valid_prefix {
+                has_inverse = true;
+                break;
+            }
+            idx = end;
+        }
+        if has_inverse {
+            break;
+        }
+    }
+
+    if !has_inverse {
         return expr.to_string();
     }
     format!("{expr} in degrees")

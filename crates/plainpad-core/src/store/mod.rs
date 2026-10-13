@@ -6,6 +6,9 @@ pub mod snapshot;
 pub mod void;
 
 pub use file::{content_hash, FileStore, FileStoreMeta, FileStoreNote};
+pub use notes::{
+    default_content_for_slot, deity_for_slot, GREEK_DEITIES, HERMES_DEFAULT_CONTENT,
+};
 pub use schema::{get_user_version, run_migrations, set_user_version, CURRENT_SCHEMA_VERSION};
 pub use snapshot::SnapshotMeta;
 
@@ -83,10 +86,12 @@ impl SqliteStore {
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         schema::run_migrations(&conn)?;
-        Ok(Self {
+        let store = Self {
             conn: Arc::new(Mutex::new(conn)),
             path: Some(path.to_path_buf()),
-        })
+        };
+        store.ensure_slotted_notes()?;
+        Ok(store)
     }
 
     /// Opens an in-memory SQLite store, enables PRAGMA foreign_keys = ON,
@@ -95,10 +100,12 @@ impl SqliteStore {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         schema::run_migrations(&conn)?;
-        Ok(Self {
+        let store = Self {
             conn: Arc::new(Mutex::new(conn)),
             path: None,
-        })
+        };
+        store.ensure_slotted_notes()?;
+        Ok(store)
     }
 
     /// Returns the filesystem path to the database file, if opened on disk.

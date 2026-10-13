@@ -130,31 +130,17 @@ fn test_the_void_soft_delete_and_restore() {
 #[test]
 fn test_slotted_note_void_immunity() {
     let store = SqliteStore::open_in_memory().expect("open store");
-    let note = store.create_note("Apollo Deity Slot Note").expect("create note");
-
-    // Manually mark as slotted
-    store
-        .with_conn(|conn| {
-            conn.execute(
-                "UPDATE notes SET is_slotted = 1, slot_index = 1 WHERE id = ?1",
-                [&note.id],
-            )?;
-            Ok(())
-        })
-        .expect("mark note slotted");
-
-    let loaded = store.load_note(&note.id).expect("load note").unwrap();
-    assert!(loaded.is_slotted);
-    assert_eq!(loaded.slot_index, 1);
+    let slotted = store.get_slotted_note(1).expect("get slot 1").unwrap();
+    assert!(slotted.is_slotted);
+    assert_eq!(slotted.slot_index, 1);
 
     // Soft delete must be rejected
-    let res = store.soft_delete_note(&note.id);
+    let res = store.soft_delete_note(&slotted.id);
     assert!(matches!(res, Err(StoreError::SlottedNoteCannotBeDeleted)));
 
-    // Note remains active
-    let active = store.list_active_notes().expect("list active");
-    assert_eq!(active.len(), 1);
-    assert_eq!(active[0].id, note.id);
+    // Slotted note remains intact and not soft deleted
+    let slotted_after = store.get_slotted_note(1).expect("get slot 1").unwrap();
+    assert!(!slotted_after.soft_deleted);
 }
 
 #[test]

@@ -50,7 +50,7 @@ impl SqliteStore {
         self.with_conn_mut(|conn| {
             let tx = conn.transaction()?;
             let next_index: i32 = tx.query_row(
-                "SELECT COALESCE(MAX(db_index), -1) + 1 FROM notes WHERE soft_deleted = 0",
+                "SELECT COALESCE(MAX(db_index), -1) + 1 FROM notes WHERE soft_deleted = 0 AND is_slotted = 0",
                 [],
                 |row| row.get(0),
             )?;

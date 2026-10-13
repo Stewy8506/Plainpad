@@ -6,6 +6,33 @@
 use fend_core::Context;
 use std::collections::BTreeMap;
 
+/// Configurable angle measurement mode for trigonometric calculations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum AngleMode {
+    #[serde(rename = "degrees")]
+    Degrees,
+    #[serde(rename = "radians")]
+    Radians,
+}
+
+impl Default for AngleMode {
+    fn default() -> Self {
+        AngleMode::Degrees
+    }
+}
+
+impl std::str::FromStr for AngleMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "degrees" | "deg" => Ok(AngleMode::Degrees),
+            "radians" | "rad" => Ok(AngleMode::Radians),
+            other => Err(format!("Unknown angle mode '{other}'; expected 'degrees' or 'radians'")),
+        }
+    }
+}
+
 /// Outcome of evaluating one expression.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MathOutcome {
@@ -15,20 +42,29 @@ pub struct MathOutcome {
     pub unit_aware: bool,
 }
 
-/// Evaluate an expression with fend. Deterministic: RNG disabled, fixed "current
-/// time", terminal output mode, no network handlers installed.
-/// A tiny in-memory cache keeps per-keystroke re-analysis well under the 30 ms
-/// budget (PRD §6): repeated identical expressions return instantly.
+/// Evaluate an expression with default Degrees angle mode.
 pub fn evaluate(expr: &str) -> Result<MathOutcome, String> {
+    evaluate_with_mode(expr, AngleMode::Degrees)
+}
+
+/// Evaluate an expression with a specific angle mode (Degrees vs Radians).
+/// Deterministic: RNG disabled, fixed "current time", terminal output mode, no network handlers.
+/// In-memory cache keeps per-keystroke re-analysis well under the 30 ms budget.
+pub fn evaluate_with_mode(expr: &str, mode: AngleMode) -> Result<MathOutcome, String> {
     use std::sync::{Mutex, OnceLock};
     type EvalCache = Mutex<Vec<(String, Result<MathOutcome, String>)>>;
     static CACHE: OnceLock<EvalCache> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(Vec::with_capacity(64)));
-    let key = expr.trim().to_string();
+    let mode_prefix = match mode {
+        AngleMode::Degrees => "deg",
+        AngleMode::Radians => "rad",
+    };
+    let trimmed = expr.trim();
+    let key = format!("{}:{}", mode_prefix, trimmed);
     if let Some(hit) = cache.lock().unwrap().iter().find(|(k, _)| *k == key) {
         return hit.1.clone();
     }
-    let outcome = evaluate_uncached(&key);
+    let outcome = evaluate_uncached_with_mode(trimmed, mode);
     {
         let mut c = cache.lock().unwrap();
         if c.len() >= 64 {
@@ -39,8 +75,12 @@ pub fn evaluate(expr: &str) -> Result<MathOutcome, String> {
     outcome
 }
 
-fn evaluate_uncached(expr: &str) -> Result<MathOutcome, String> {
+fn evaluate_uncached_with_mode(expr: &str, mode: AngleMode) -> Result<MathOutcome, String> {
     let prepared = preprocess_math_grammar(expr);
+    let prepared = match mode {
+        AngleMode::Degrees => apply_degrees_mode(&prepared),
+        AngleMode::Radians => prepared,
+    };
     let mut ctx = Context::new();
     ctx.disable_rng();
     ctx.set_current_time_v1(0, 0);
@@ -329,9 +369,14 @@ pub fn parse_leading_number(t: &str) -> Vec<f64> {
     v
 }
 
-/// Try the full evaluation stack for a note line: base conversion → percent
-/// rewrite + variable substitution → grammar preprocessing → fend. Returns None when nothing parses.
+/// Try the full evaluation stack for a note line with default Degrees mode.
 pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
+    eval_line_with_mode(expr, vars, AngleMode::Degrees)
+}
+
+/// Try the full evaluation stack for a note line with a specific angle mode:
+/// base conversion → percent rewrite + variable substitution → grammar preprocessing → fend. Returns None when nothing parses.
+pub fn eval_line_with_mode(expr: &str, vars: &Vars, mode: AngleMode) -> Option<MathOutcome> {
     let raw = expr.trim().trim_end_matches(['=', '?']).trim();
     if raw.is_empty() {
         return None;
@@ -358,7 +403,7 @@ pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
             return Some(MathOutcome { result: r, unit_aware: false });
         }
     }
-    if let Ok(m) = evaluate(&prepared) {
+    if let Ok(m) = evaluate_with_mode(&prepared, mode) {
         let main = m.result.trim().to_string();
         if !main.is_empty() {
             return Some(MathOutcome { result: main, unit_aware: m.unit_aware });
@@ -421,6 +466,106 @@ fn eval_bitwise(expr: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Rewrite trigonometric functions for degrees mode:
+/// - Circular trig `sin`, `cos`, `tan` arguments receive `((arg) deg)` when lacking explicit angular units
+/// - Inverse trig `asin`, `acos`, `atan` receive ` in degrees` when lacking explicit target units
+/// - Hyperbolic functions `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh` remain untouched (dimensionless)
+pub fn apply_degrees_mode(expr: &str) -> String {
+    let mut s = rewrite_direct_trig_degrees(expr);
+    s = rewrite_inverse_trig_degrees(&s);
+    s
+}
+
+fn rewrite_direct_trig_degrees(expr: &str) -> String {
+    const DIRECT_TRIG: &[&str] = &["sin", "cos", "tan"];
+    let chars: Vec<char> = expr.chars().collect();
+    let len = chars.len();
+    let mut out = String::with_capacity(len + 16);
+    let mut i = 0;
+
+    while i < len {
+        let prev_char = if i == 0 { None } else { Some(chars[i - 1]) };
+        let valid_prefix = prev_char.is_none_or(|p| !p.is_alphanumeric() && p != '_');
+
+        if valid_prefix {
+            let mut matched = None;
+            for &func in DIRECT_TRIG {
+                let func_len = func.len();
+                if i + func_len <= len {
+                    let candidate: String = chars[i..i + func_len].iter().collect();
+                    if candidate.eq_ignore_ascii_case(func) {
+                        let after_idx = i + func_len;
+                        let valid_suffix = after_idx >= len || (!chars[after_idx].is_alphabetic() && chars[after_idx] != '_');
+                        if valid_suffix {
+                            matched = Some((func, func_len));
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let Some((func_name, func_len)) = matched {
+                let mut paren_start = i + func_len;
+                while paren_start < len && (chars[paren_start] == ' ' || chars[paren_start] == '\t') {
+                    paren_start += 1;
+                }
+
+                if paren_start < len && chars[paren_start] == '(' {
+                    let mut depth = 1;
+                    let mut paren_end = paren_start + 1;
+                    while paren_end < len && depth > 0 {
+                        if chars[paren_end] == '(' {
+                            depth += 1;
+                        } else if chars[paren_end] == ')' {
+                            depth -= 1;
+                        }
+                        paren_end += 1;
+                    }
+
+                    if depth == 0 {
+                        let arg: String = chars[paren_start + 1..paren_end - 1].iter().collect();
+                        let arg_lower = arg.to_lowercase();
+                        let already_has_unit = arg_lower.contains("deg")
+                            || arg_lower.contains("degree")
+                            || arg_lower.contains("rad")
+                            || arg_lower.contains("radian")
+                            || arg_lower.contains('°');
+
+                        let processed_arg = rewrite_direct_trig_degrees(&arg);
+                        out.push_str(func_name);
+                        out.push('(');
+                        if already_has_unit {
+                            out.push_str(&processed_arg);
+                        } else {
+                            out.push_str(&format!("(({processed_arg}) deg)"));
+                        }
+                        out.push(')');
+                        i = paren_end;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        out.push(chars[i]);
+        i += 1;
+    }
+
+    out
+}
+
+fn rewrite_inverse_trig_degrees(expr: &str) -> String {
+    let lower = expr.to_lowercase();
+    let has_inverse = lower.contains("asin") || lower.contains("acos") || lower.contains("atan");
+    if !has_inverse {
+        return expr.to_string();
+    }
+    if lower.contains(" in ") || lower.contains(" to ") {
+        return expr.to_string();
+    }
+    format!("{expr} in degrees")
 }
 
 /// Preprocess natural-language mathematical grammar replicating Antinote DDMathParser rules:
@@ -829,5 +974,43 @@ mod tests {
     fn eval_line_garbage_is_none() {
         assert!(eval_line("hello world", &Vars::new()).is_none());
         assert!(eval_line("", &Vars::new()).is_none());
+    }
+
+    #[test]
+    fn angle_modes_and_trig() {
+        // Degrees mode (default)
+        let m = evaluate_with_mode("sin(90)", AngleMode::Degrees).unwrap();
+        assert_eq!(m.result, "1");
+        let m = evaluate_with_mode("cos(0)", AngleMode::Degrees).unwrap();
+        assert_eq!(m.result, "1");
+        let m = evaluate_with_mode("cos(90)", AngleMode::Degrees).unwrap();
+        assert_eq!(m.result, "0");
+        let m = evaluate_with_mode("tan(45)", AngleMode::Degrees).unwrap();
+        assert!(m.result.contains('1'), "tan(45) deg: {}", m.result);
+        let m = evaluate_with_mode("asin(1)", AngleMode::Degrees).unwrap();
+        assert!(m.result.contains("90") && m.result.contains("deg"), "asin(1) deg: {}", m.result);
+
+        // Radians mode
+        let m = evaluate_with_mode("sin(pi/2)", AngleMode::Radians).unwrap();
+        assert_eq!(m.result, "1");
+        let m = evaluate_with_mode("cos(pi)", AngleMode::Radians).unwrap();
+        assert_eq!(m.result, "-1");
+        let m = evaluate_with_mode("tan(pi/4)", AngleMode::Radians).unwrap();
+        assert!(m.result.contains('1'), "tan(pi/4) rad: {}", m.result);
+
+        // Hyperbolic functions (unscaled)
+        let m = evaluate_with_mode("sinh(0)", AngleMode::Degrees).unwrap();
+        assert!(m.result.contains('0'), "sinh(0): {}", m.result);
+        let m = evaluate_with_mode("cosh(0)", AngleMode::Degrees).unwrap();
+        assert!(m.result.contains('1'), "cosh(0): {}", m.result);
+        let m = evaluate_with_mode("tanh(0)", AngleMode::Degrees).unwrap();
+        assert!(m.result.contains('0'), "tanh(0): {}", m.result);
+
+        // eval_line_with_mode
+        let vars = Vars::new();
+        let m = eval_line_with_mode("sin(90)", &vars, AngleMode::Degrees).unwrap();
+        assert_eq!(m.result, "1");
+        let m = eval_line_with_mode("sin(pi/2)", &vars, AngleMode::Radians).unwrap();
+        assert_eq!(m.result, "1");
     }
 }

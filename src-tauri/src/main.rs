@@ -457,8 +457,52 @@ fn set_geometry(
 }
 
 #[tauri::command]
-fn eval_math(expr: String) -> Option<String> {
-    plainpad_core::mathwrap::evaluate(&expr).ok().map(|m| m.result)
+fn eval_math(expr: String, state: tauri::State<'_, Mutex<AppState>>) -> Option<String> {
+    let mode_str = state
+        .lock()
+        .unwrap()
+        .store
+        .get_setting("angleMeasurementMode")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "degrees".to_string());
+    let mode = mode_str
+        .parse::<plainpad_core::mathwrap::AngleMode>()
+        .unwrap_or(plainpad_core::mathwrap::AngleMode::Degrees);
+    plainpad_core::mathwrap::evaluate_with_mode(&expr, mode)
+        .ok()
+        .map(|m| m.result)
+}
+
+#[tauri::command]
+fn set_angle_mode(
+    mode: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let normalized = mode.trim().to_lowercase();
+    if normalized != "degrees" && normalized != "radians" {
+        return Err("Angle mode must be 'degrees' or 'radians'".into());
+    }
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_setting("angleMeasurementMode", serde_json::Value::String(normalized))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_angle_mode(state: tauri::State<'_, Mutex<AppState>>) -> Result<String, String> {
+    let mode = state
+        .lock()
+        .unwrap()
+        .store
+        .get_setting("angleMeasurementMode")
+        .map_err(|e| e.to_string())?
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "degrees".to_string());
+    Ok(mode)
 }
 
 #[tauri::command]
@@ -814,6 +858,8 @@ fn main() {
             get_geometry,
             set_geometry,
             eval_math,
+            set_angle_mode,
+            get_angle_mode,
             block_stats,
             minimize_window,
             hide_window,

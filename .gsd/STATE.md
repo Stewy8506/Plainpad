@@ -8,20 +8,18 @@ updated: 2026-10-13T19:28:00+05:30
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
 **Phase:** 1 - SQLite Storage Engine & Core Data Model 9 Parity  
-**Status:** ready for execution  
+**Status:** in progress (Plan 1.1 complete)  
 **Roadmap:** `.gsd/ROADMAP.md` (8 phases, 20 plans decomposed)  
 **Requirements:** `.gsd/REQUIREMENTS.md` (30 functional requirements tracked)  
-**Phase 1 Plans:** `.gsd/phases/1/01-PLAN.md`, `.gsd/phases/1/02-PLAN.md`, `.gsd/phases/1/03-PLAN.md`  
+**Phase 1 Plans:** `.gsd/phases/1/01-PLAN.md` (done), `.gsd/phases/1/02-PLAN.md`, `.gsd/phases/1/03-PLAN.md`  
 
 ## Last Action
 
-- Extracted exhaustive reverse-engineering findings into `.gsd/findings.md` and finalized `.gsd/SPEC.md`.
-- Formulated `.gsd/REQUIREMENTS.md` capturing all 30 functional requirements across the 8 parity domains.
-- Authored `.gsd/ROADMAP.md` establishing the 8-phase execution plan for 100% Antinote parity.
-- Invoked `gsd-planner` subagent to generate atomic execution plans for Phase 1:
-  - `01-PLAN.md` (Wave 1): SQLite schema migrations (Models 1-9) & Core Data Model 9 entities in `plainpad-core`.
-  - `02-PLAN.md` (Wave 2): Note lifecycle CRUD, stack ordering (`db_index`), lock protection, archiving, and The Void soft-delete lifecycle.
-  - `03-PLAN.md` (Wave 3): Relational child store (checklists, antilinks, attachments, sync state), pre-restore safety snapshots, and Tauri IPC integration.
+- Executed `01-PLAN.md` (Plan 1.1):
+  - Defined Core Data Model 9 data entities (`Note`, `NoteMeta`, `ChecklistItem`, `Antilink`, `Attachment`, `SyncState`) in `plainpad-core`.
+  - Implemented sequential SQLite schema migrations (Models 1 through 9) and `SqliteStore` with WAL mode and foreign key enforcement.
+  - Added comprehensive integration tests in `crates/plainpad-core/tests/schema_tests.rs` verifying migrations, tables, columns, and foreign key cascades.
+  - Summary written to `.gsd/phases/1/01-SUMMARY.md`.
 
 ## Next Steps
 

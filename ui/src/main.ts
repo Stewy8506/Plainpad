@@ -1,6 +1,6 @@
 // Plainpad — UI entry point
 // No framework: textarea + mirror + overlay editor with IPC to Tauri core.
-export {};
+import { SlottedNotesBottomBar, DEITY_SLOTS } from './slotted.js';
 
 interface TauriAPI {
   core: {
@@ -46,14 +46,39 @@ async function listen(event: string, cb: (payload: unknown) => void): Promise<vo
 interface NoteMeta {
   id: string;
   title: string;
-  mtime_ms: number;
-  pinned: boolean;
-  plain: boolean;
+  last_modified: string;
+  db_index: number;
+  is_slotted: boolean;
+  slot_index: number;
+  is_locked: boolean;
+  is_archived: boolean;
+  is_private: boolean;
+  is_tutorial: boolean;
+  soft_deleted: boolean;
+  deleted_at: string | null;
+  pinned?: boolean;
+  plain?: boolean;
 }
 
 interface Note {
-  meta: NoteMeta;
-  text: string;
+  id: string;
+  content: string;
+  created: string;
+  last_modified: string;
+  db_index: number;
+  is_slotted: boolean;
+  slot_index: number;
+  is_locked: boolean;
+  is_archived: boolean;
+  is_private: boolean;
+  is_tutorial: boolean;
+  soft_deleted: boolean;
+  deleted_at: string | null;
+  skipped_urls?: string[];
+  ck_change_tag?: string | null;
+  ck_system_fields?: number[] | null;
+  text?: string;
+  meta?: NoteMeta;
 }
 
 interface Annotation {
@@ -88,6 +113,9 @@ let currentIndex = 0;
 let currentId = '';
 let currentText = '';
 let currentPlain = false;
+let currentIsSlotted = false;
+let currentSlotIndex = -1;
+let slottedBar: SlottedNotesBottomBar | null = null;
 let globalPlain = false;
 let hideOnBlur = false;
 let swipeNav = false;
@@ -96,6 +124,7 @@ let autoBrackets = true;
 let tabWidth = '2';
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let analyzeTimeout: ReturnType<typeof setTimeout> | null = null;
+let statusTimeout: ReturnType<typeof setTimeout> | null = null;
 let activeTimers: Timer[] = [];
 
 // ---------- DOM refs ----------
@@ -118,15 +147,38 @@ const btnMinimize = document.getElementById('btn-minimize') as HTMLButtonElement
 const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement;
 const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
 const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
+const syncStatus = document.getElementById('sync-status') as HTMLSpanElement | null;
+
+function showStatusMessage(msg: string, durationMs = 2500): void {
+  if (!syncStatus) return;
+  syncStatus.textContent = msg;
+  if (statusTimeout) clearTimeout(statusTimeout);
+  statusTimeout = setTimeout(() => {
+    if (syncStatus.textContent === msg) {
+      syncStatus.textContent = '';
+    }
+  }, durationMs);
+}
 
 // ---------- Init ----------
 
 async function init(): Promise<void> {
+  const slottedBarContainer = document.getElementById('slotted-bar');
+  if (slottedBarContainer) {
+    slottedBar = new SlottedNotesBottomBar(slottedBarContainer, (slotIndex) => {
+      switchToSlot(slotIndex).catch(console.error);
+    });
+  }
+
   await loadNotes();
   if (notes.length === 0) {
-    // First run: create a demo note
-    const id = await invoke<string>('create_note');
-    const demoText = `math
+    const slotted = await invoke<NoteMeta[]>('list_slotted_notes');
+    if (slotted && slotted.length > 0) {
+      await switchToSlot(0);
+    } else {
+      // First run: create a demo note
+      const id = await invoke<string>('create_note');
+      const demoText = `math
 
 rent 12000
 food 4500
@@ -141,10 +193,13 @@ timer 25 min
 todo call dentist
 
 buy milk, eggs, bread`;
-    await invoke('save_note', { id, text: demoText });
-    await loadNotes();
+      await invoke('save_note', { id, text: demoText });
+      await loadNotes();
+      await loadNote(0);
+    }
+  } else {
+    await loadNote(0);
   }
-  await loadNote(0);
   editor.focus();
 
   // Settings
@@ -221,21 +276,56 @@ async function loadNotes(): Promise<void> {
   notes = (await invoke<NoteMeta[]>('list_notes')) || [];
 }
 
+async function switchToSlot(slotIndex: number): Promise<void> {
+  if (slotIndex < 0 || slotIndex >= DEITY_SLOTS.length) return;
+  await saveCurrentNote();
+
+  const note = await invoke<Note>('get_slotted_note', { slot: slotIndex });
+  if (!note) {
+    console.warn(`[slotted] Slot ${slotIndex} not found`);
+    return;
+  }
+
+  currentId = note.id;
+  currentText = note.content ?? note.text ?? '';
+  editor.value = currentText;
+  currentIsSlotted = true;
+  currentSlotIndex = slotIndex;
+  currentPlain = false;
+
+  updateBackdrop();
+  activeAnnoCache.clear();
+  overlay.innerHTML = '';
+  skipKineticAnimation = true;
+
+  if (slottedBar) {
+    slottedBar.setActiveSlot(slotIndex);
+  }
+  updateNoteUI();
+  scheduleAnalyze();
+  editor.focus();
+}
+
 async function loadNote(index: number): Promise<void> {
   if (notes.length === 0) return;
   currentIndex = Math.max(0, Math.min(index, notes.length - 1));
   const meta = notes[currentIndex];
   currentId = meta.id;
-  currentPlain = meta.plain;
+  currentIsSlotted = meta.is_slotted;
+  currentSlotIndex = meta.is_slotted ? meta.slot_index : -1;
+  currentPlain = meta.plain ?? false;
 
   const note = await invoke<Note>('load_note', { id: currentId });
-  currentText = note?.text || '';
+  currentText = note?.content ?? note?.text ?? '';
   editor.value = currentText;
   updateBackdrop();
 
   activeAnnoCache.clear();
   overlay.innerHTML = '';
   skipKineticAnimation = true;
+  if (slottedBar) {
+    slottedBar.setActiveSlot(meta.is_slotted ? meta.slot_index : null);
+  }
   updateNoteUI();
   scheduleAnalyze();
 }
@@ -246,8 +336,14 @@ async function saveCurrentNote(): Promise<void> {
   if (text === currentText) return;
   currentText = text;
 
-  // Discard empty notes
+  // Discard empty notes ONLY IF NOT SLOTTED
   if (text.trim() === '') {
+    if (currentIsSlotted) {
+      // Slotted notes are permanent scratchpads and remain active even when empty!
+      await invoke('save_note', { id: currentId, text });
+      return;
+    }
+
     await invoke('delete_note', { id: currentId });
     await loadNotes();
     if (notes.length === 0) {
@@ -259,7 +355,9 @@ async function saveCurrentNote(): Promise<void> {
   }
 
   await invoke('save_note', { id: currentId, text });
-  await loadNotes();
+  if (!currentIsSlotted) {
+    await loadNotes();
+  }
   updateNoteUI();
 }
 
@@ -268,22 +366,47 @@ async function createNewNote(): Promise<void> {
   const id = await invoke<string>('create_note');
   currentId = id;
   currentText = '';
+  currentIsSlotted = false;
+  currentSlotIndex = -1;
   editor.value = '';
   updateBackdrop();
   await loadNotes();
 
   // New note goes to front
-  notes.unshift({ id, title: '', mtime_ms: Date.now(), pinned: false, plain: false });
+  const now = new Date().toISOString();
+  notes.unshift({
+    id,
+    title: '',
+    last_modified: now,
+    db_index: 0,
+    is_slotted: false,
+    slot_index: -1,
+    is_locked: false,
+    is_archived: false,
+    is_private: false,
+    is_tutorial: false,
+    soft_deleted: false,
+    deleted_at: null,
+    pinned: false,
+    plain: false,
+  });
   currentIndex = 0;
   currentPlain = false;
   activeAnnoCache.clear();
   overlay.innerHTML = '';
+  if (slottedBar) {
+    slottedBar.setActiveSlot(null);
+  }
   updateNoteUI();
   editor.focus();
 }
 
 async function deleteCurrentNote(): Promise<void> {
   if (!currentId) return;
+  if (currentIsSlotted) {
+    showStatusMessage('Slotted notes cannot be deleted');
+    return;
+  }
   await invoke('delete_note', { id: currentId });
   await loadNotes();
   if (notes.length === 0) {
@@ -296,6 +419,13 @@ async function deleteCurrentNote(): Promise<void> {
 // ---------- Navigation ----------
 
 async function prevNote(): Promise<void> {
+  if (currentIsSlotted) {
+    if (notes.length > 0) {
+      await saveCurrentNote();
+      await loadNote(currentIndex);
+    }
+    return;
+  }
   if (currentIndex > 0) {
     await saveCurrentNote();
     await loadNote(currentIndex - 1);
@@ -303,6 +433,15 @@ async function prevNote(): Promise<void> {
 }
 
 async function nextNote(): Promise<void> {
+  if (currentIsSlotted) {
+    if (notes.length > 0) {
+      await saveCurrentNote();
+      await loadNote(currentIndex);
+    } else {
+      await createNewNote();
+    }
+    return;
+  }
   if (currentIndex < notes.length - 1) {
     await saveCurrentNote();
     await loadNote(currentIndex + 1);
@@ -313,14 +452,29 @@ async function nextNote(): Promise<void> {
 }
 
 function updateNoteUI(): void {
-  const idx = notes.findIndex((n) => n.id === currentId);
-  if (idx >= 0) currentIndex = idx;
-  noteIndex.textContent = notes.length > 0 ? `${currentIndex + 1}/${notes.length}` : '0/0';
-
-  const meta = notes[currentIndex];
-  if (meta) {
-    btnPin.classList.toggle('active', meta.pinned);
+  if (currentIsSlotted && currentSlotIndex >= 0 && currentSlotIndex < DEITY_SLOTS.length) {
+    noteIndex.textContent = `${DEITY_SLOTS[currentSlotIndex].name} (${currentSlotIndex + 1}/9)`;
+    btnPin.classList.remove('active');
+    btnPin.classList.add('disabled');
+    btnPin.style.opacity = '0.3';
+    btnPin.style.pointerEvents = 'none';
+    btnPin.title = 'Slotted notes have a fixed position';
     btnPlain.classList.toggle('active', currentPlain || globalPlain);
+  } else {
+    btnPin.classList.remove('disabled');
+    btnPin.style.opacity = '';
+    btnPin.style.pointerEvents = '';
+    btnPin.title = 'Pin note to top of list';
+
+    const idx = notes.findIndex((n) => n.id === currentId);
+    if (idx >= 0) currentIndex = idx;
+    noteIndex.textContent = notes.length > 0 ? `${currentIndex + 1}/${notes.length}` : '0/0';
+
+    const meta = notes[currentIndex];
+    if (meta) {
+      btnPin.classList.toggle('active', !!meta.pinned);
+      btnPlain.classList.toggle('active', currentPlain || globalPlain);
+    }
   }
 }
 
@@ -970,7 +1124,7 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
   }
 
   // Tab → accept chip or indent
-  if (e.key === 'Tab' && !e.shiftKey) {
+  if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
     const chipEl = overlay.querySelector(`.anno-chip`) as HTMLElement | null;
     if (chipEl) {
@@ -988,6 +1142,30 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     updateBackdrop();
     scheduleSave();
     scheduleAnalyze();
+    return;
+  }
+
+  const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
+  // Direct slot jump: Ctrl+1 through Ctrl+9
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && e.key >= '1' && e.key <= '9') {
+    e.preventDefault();
+    const slot = parseInt(e.key, 10) - 1;
+    switchToSlot(slot).catch(console.error);
+    return;
+  }
+
+  // Cycle navigation: Ctrl+Tab and Ctrl+Shift+Tab
+  if (isCtrlOrMeta && !e.altKey && e.key === 'Tab') {
+    e.preventDefault();
+    if (currentIsSlotted && currentSlotIndex >= 0) {
+      const targetSlot = e.shiftKey
+        ? (currentSlotIndex + 8) % 9
+        : (currentSlotIndex + 1) % 9;
+      switchToSlot(targetSlot).catch(console.error);
+    } else {
+      switchToSlot(0).catch(console.error);
+    }
     return;
   }
 
@@ -1024,13 +1202,13 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
   }
 
   // Ctrl+Shift+D → delete note
-  if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
     e.preventDefault();
     deleteCurrentNote();
   }
 
   // Ctrl+Shift+E → export
-  if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
     e.preventDefault();
     exportNote();
   }
@@ -1039,6 +1217,33 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.ctrlKey && e.key === 'p') {
     e.preventDefault();
     togglePlainMode();
+  }
+});
+
+// Global hotkeys (direct slot jumps Ctrl+1..9, cycle navigation Ctrl+Tab)
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
+  // Direct slot jump: Ctrl+1 through Ctrl+9
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && e.key >= '1' && e.key <= '9') {
+    e.preventDefault();
+    const slot = parseInt(e.key, 10) - 1;
+    switchToSlot(slot).catch(console.error);
+    return;
+  }
+
+  // Cycle navigation: Ctrl+Tab and Ctrl+Shift+Tab
+  if (isCtrlOrMeta && !e.altKey && e.key === 'Tab') {
+    e.preventDefault();
+    if (currentIsSlotted && currentSlotIndex >= 0) {
+      const targetSlot = e.shiftKey
+        ? (currentSlotIndex + 8) % 9
+        : (currentSlotIndex + 1) % 9;
+      switchToSlot(targetSlot).catch(console.error);
+    } else {
+      switchToSlot(0).catch(console.error);
+    }
+    return;
   }
 });
 
@@ -1061,8 +1266,12 @@ btnSettings.addEventListener('click', () => {
 });
 
 btnPin.addEventListener('click', async () => {
+  if (currentIsSlotted) {
+    showStatusMessage('Slotted notes cannot be pinned');
+    return;
+  }
   if (!currentId || !notes[currentIndex]) return;
-  const newVal = !notes[currentIndex].pinned;
+  const newVal = !(notes[currentIndex].pinned ?? false);
   await invoke('set_pinned', { id: currentId, pinned: newVal });
   await loadNotes();
   updateNoteUI();

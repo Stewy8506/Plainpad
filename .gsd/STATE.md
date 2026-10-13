@@ -8,24 +8,24 @@ updated: 2026-10-13T19:28:00+05:30
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
 **Phase:** 1 - SQLite Storage Engine & Core Data Model 9 Parity  
-**Status:** in progress (Plan 1.1 complete)  
+**Status:** Phase 1 complete (Plans 1.1, 1.2, 1.3 complete)  
 **Roadmap:** `.gsd/ROADMAP.md` (8 phases, 20 plans decomposed)  
 **Requirements:** `.gsd/REQUIREMENTS.md` (30 functional requirements tracked)  
-**Phase 1 Plans:** `.gsd/phases/1/01-PLAN.md` (done), `.gsd/phases/1/02-PLAN.md`, `.gsd/phases/1/03-PLAN.md`  
+**Phase 1 Plans:** `.gsd/phases/1/01-PLAN.md` (done), `.gsd/phases/1/02-PLAN.md` (done), `.gsd/phases/1/03-PLAN.md` (done)  
 
 ## Last Action
 
-- Executed `01-PLAN.md` (Plan 1.1):
-  - Defined Core Data Model 9 data entities (`Note`, `NoteMeta`, `ChecklistItem`, `Antilink`, `Attachment`, `SyncState`) in `plainpad-core`.
-  - Implemented sequential SQLite schema migrations (Models 1 through 9) and `SqliteStore` with WAL mode and foreign key enforcement.
-  - Added comprehensive integration tests in `crates/plainpad-core/tests/schema_tests.rs` verifying migrations, tables, columns, and foreign key cascades.
-  - Summary written to `.gsd/phases/1/01-SUMMARY.md`.
+- Executed `03-PLAN.md` (Plan 1.3):
+  - Implemented relational child entity CRUD (`ChecklistItem`, `Antilink`, `Attachment`, `SyncState`) in `crates/plainpad-core/src/store/relational.rs`.
+  - Implemented Pre-Restore Safety Snapshot manager with sync isolation (`sync_isolated: true`) in `crates/plainpad-core/src/store/snapshot.rs`.
+  - Added full integration tests in `crates/plainpad-core/tests/relational_and_snapshot_tests.rs`.
+  - Replaced `FileStore` with `SqliteStore` in `src-tauri` AppState and registered all Core Data Model 9 & The Void IPC commands.
+  - Summary written to `.gsd/phases/1/03-SUMMARY.md`.
 
 ## Next Steps
 
-1. Execute Phase 1 plans using `/execute 1` (or delegating to `gsd-executor` per plan).
-2. Verify Phase 1 deliverables against `.gsd/REQUIREMENTS.md` (REQ-01 to REQ-04).
-3. Transition to Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation.
+1. Verify Phase 1 deliverables against `.gsd/REQUIREMENTS.md` (REQ-01 to REQ-04).
+2. Transition to Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation.
 
 ## Active Decisions
 

@@ -350,8 +350,8 @@ fn determine_target_display(to_unit_raw: &str, info: &UnitInfo) -> String {
         Dimension::Distance => {
             if norm == "miles" {
                 "miles".to_string()
-            } else if norm == "feet" {
-                "feet".to_string()
+            } else if norm == "feet" || norm == "foot" || norm == "ft" || norm == "'" {
+                "ft".to_string()
             } else {
                 info.canonical_display.to_string()
             }

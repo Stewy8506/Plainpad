@@ -139,6 +139,19 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
             }
         }
 
+        // Physical unit conversion (Distance, Area, Mass, Volume, Temperature)
+        if let Some((res, why)) = crate::units::parse_and_convert(t) {
+            annotations.push(Annotation {
+                line: i,
+                kind: "conversion",
+                confidence: 0.95,
+                chip: format!("Convert ({res})"),
+                value: res,
+                why,
+            });
+            continue;
+        }
+
         // Math / conversions / variables.
         if let Some((kind, conf, value, why)) = classify_math(t, &vars, forced == ForcedMode::Math) {
             annotations.push(Annotation {
@@ -280,6 +293,11 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
 
     // Currency & crypto conversion (`$32 USD to JPY =`, `100 usd in inr`, `0.5 btc to usd`, `₹5,000 in usd`).
     if let Some((res, why)) = crate::currency::evaluate_currency(t) {
+        return Some(("conversion", 0.95, res, why));
+    }
+
+    // Physical unit conversion (`5 cuerdas in acres`, `14 st in kg`, `2 uk pint in ml`).
+    if let Some((res, why)) = crate::units::parse_and_convert(t) {
         return Some(("conversion", 0.95, res, why));
     }
 
@@ -496,5 +514,21 @@ mod tests {
             assert!(anno.confidence >= 0.9);
             assert!(!anno.value.is_empty());
         }
+    }
+
+    #[test]
+    fn physical_unit_conversions_annotated() {
+        let text = "5 cuerdas in acres\n14 st in kg\n2 uk pint in ml\n32 fahrenheit in celsius";
+        let a = analyze(text, false);
+        assert_eq!(a.annotations.len(), 4);
+        assert_eq!(a.annotations[0].kind, "conversion");
+        assert!(a.annotations[0].value.contains("4.856"));
+        assert!(a.annotations[0].chip.contains("Convert"));
+        assert_eq!(a.annotations[1].kind, "conversion");
+        assert!(a.annotations[1].value.contains("88.9"));
+        assert_eq!(a.annotations[2].kind, "conversion");
+        assert!(a.annotations[2].value.contains("1136.5"));
+        assert_eq!(a.annotations[3].kind, "conversion");
+        assert_eq!(a.annotations[3].value, "0 °C");
     }
 }

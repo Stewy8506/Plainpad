@@ -76,6 +76,9 @@ pub fn evaluate_with_mode(expr: &str, mode: AngleMode) -> Result<MathOutcome, St
 }
 
 fn evaluate_uncached_with_mode(expr: &str, mode: AngleMode) -> Result<MathOutcome, String> {
+    if let Some((res, _)) = crate::units::parse_and_convert(expr) {
+        return Ok(MathOutcome { result: res, unit_aware: true });
+    }
     let prepared = preprocess_math_grammar(expr);
     let prepared = match mode {
         AngleMode::Degrees => apply_degrees_mode(&prepared),
@@ -389,6 +392,9 @@ pub fn eval_line_with_mode(expr: &str, vars: &Vars, mode: AngleMode) -> Option<M
     };
     if let Some(b) = base_conversion(t) {
         return Some(MathOutcome { result: b, unit_aware: false });
+    }
+    if let Some((res, _)) = crate::units::parse_and_convert(t) {
+        return Some(MathOutcome { result: res, unit_aware: true });
     }
     let prepared = rewrite_percent(&substitute_vars(t, vars));
     // Antinote-style `x` multiplication (`trees x o2 per tree`).

@@ -32,8 +32,45 @@ pub struct RatesInfo {
     pub is_seed: bool,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct CurrencyFormatConfig {
+    pub thousands_separator: String,   // default: "," (or ".", " ")
+    pub decimal_separator: String,     // default: "." (or ",")
+    pub decimal_points: usize,         // default: 2
+    pub use_thousands_separator: bool, // default: true
+}
+
+impl Default for CurrencyFormatConfig {
+    fn default() -> Self {
+        Self {
+            thousands_separator: ",".to_string(),
+            decimal_separator: ".".to_string(),
+            decimal_points: 2,
+            use_thousands_separator: true,
+        }
+    }
+}
+
+static FORMAT_CONFIG: OnceLock<RwLock<CurrencyFormatConfig>> = OnceLock::new();
+
+pub fn get_format_config() -> CurrencyFormatConfig {
+    FORMAT_CONFIG
+        .get_or_init(|| RwLock::new(CurrencyFormatConfig::default()))
+        .read()
+        .unwrap()
+        .clone()
+}
+
+pub fn set_format_config(config: CurrencyFormatConfig) {
+    let lock = FORMAT_CONFIG.get_or_init(|| RwLock::new(CurrencyFormatConfig::default()));
+    if let Ok(mut w) = lock.write() {
+        *w = config;
+    }
+}
+
 pub struct CurrencyEngine {
     rates: HashMap<String, f64>,
+    manual_rates: HashMap<String, f64>,
     last_updated_unix: u64,
     last_updated_utc: String,
     is_seed: bool,
@@ -45,6 +82,7 @@ impl CurrencyEngine {
         let seed_json = include_str!("seed_rates.json");
         Self::from_json(seed_json, true).unwrap_or_else(|| Self {
             rates: Self::fallback_rates(),
+            manual_rates: HashMap::new(),
             last_updated_unix: 0,
             last_updated_utc: "Seed fallback".into(),
             is_seed: true,
@@ -74,6 +112,7 @@ impl CurrencyEngine {
 
         Some(Self {
             rates,
+            manual_rates: HashMap::new(),
             last_updated_unix: snap.time_last_update_unix.unwrap_or(0),
             last_updated_utc: snap.time_last_update_utc.unwrap_or_else(|| "Unknown".into()),
             is_seed,
@@ -92,21 +131,51 @@ impl CurrencyEngine {
         }
     }
 
+    pub fn set_manual_rate(&mut self, code: &str, rate: f64) {
+        self.manual_rates.insert(code.to_uppercase(), rate);
+    }
+
+    pub fn remove_manual_rate(&mut self, code: &str) {
+        self.manual_rates.remove(&code.to_uppercase());
+    }
+
+    pub fn get_manual_rates(&self) -> HashMap<String, f64> {
+        self.manual_rates.clone()
+    }
+
+    pub fn load_manual_rates(&mut self, rates: HashMap<String, f64>) {
+        self.manual_rates = rates
+            .into_iter()
+            .map(|(k, v)| (k.to_uppercase(), v))
+            .collect();
+    }
+
     pub fn info(&self) -> RatesInfo {
+        let mut total = self.rates.len();
+        for k in self.manual_rates.keys() {
+            if !self.rates.contains_key(k) {
+                total += 1;
+            }
+        }
         RatesInfo {
             last_updated_unix: self.last_updated_unix,
             last_updated_utc: self.last_updated_utc.clone(),
-            currency_count: self.rates.len(),
+            currency_count: total,
             is_seed: self.is_seed,
         }
     }
 
     pub fn get_rate(&self, code: &str) -> Option<f64> {
-        self.rates.get(&code.to_uppercase()).copied()
+        let upper = code.to_uppercase();
+        if let Some(&rate) = self.manual_rates.get(&upper) {
+            return Some(rate);
+        }
+        self.rates.get(&upper).copied()
     }
 
     pub fn has_currency(&self, code: &str) -> bool {
-        self.rates.contains_key(&code.to_uppercase())
+        let upper = code.to_uppercase();
+        self.manual_rates.contains_key(&upper) || self.rates.contains_key(&upper)
     }
 
     /// Convert an amount from one currency to another using the USD pivot.
@@ -137,6 +206,40 @@ pub fn update_rates(json_str: &str) -> bool {
     }
 }
 
+/// Set a manual exchange rate override.
+pub fn set_manual_rate(code: &str, rate: f64) {
+    let engine = global_engine();
+    if let Ok(mut lock) = engine.write() {
+        lock.set_manual_rate(code, rate);
+    }
+}
+
+/// Remove a manual exchange rate override.
+pub fn remove_manual_rate(code: &str) {
+    let engine = global_engine();
+    if let Ok(mut lock) = engine.write() {
+        lock.remove_manual_rate(code);
+    }
+}
+
+/// Retrieve all active manual exchange rate overrides.
+pub fn get_manual_rates() -> HashMap<String, f64> {
+    let engine = global_engine();
+    if let Ok(lock) = engine.read() {
+        lock.get_manual_rates()
+    } else {
+        HashMap::new()
+    }
+}
+
+/// Load a map of manual exchange rate overrides into the global engine.
+pub fn load_manual_rates(rates: HashMap<String, f64>) {
+    let engine = global_engine();
+    if let Ok(mut lock) = engine.write() {
+        lock.load_manual_rates(rates);
+    }
+}
+
 /// Get metadata about the currently loaded rates.
 pub fn get_rates_info() -> RatesInfo {
     let engine = global_engine();
@@ -144,25 +247,88 @@ pub fn get_rates_info() -> RatesInfo {
     lock.info()
 }
 
+pub fn group_integer_digits(int_str: &str, sep: &str) -> String {
+    let chars: Vec<char> = int_str.chars().collect();
+    let len = chars.len();
+    let mut out = String::with_capacity(len + len / 3);
+    for (i, c) in chars.iter().enumerate() {
+        out.push(*c);
+        let rem = len - 1 - i;
+        if rem > 0 && rem % 3 == 0 {
+            out.push_str(sep);
+        }
+    }
+    out
+}
+
+/// Format an amount using a specific CurrencyFormatConfig.
+pub fn format_amount(amount: f64, config: &CurrencyFormatConfig) -> String {
+    let sign = if amount < 0.0 { "-" } else { "" };
+    let abs_amount = amount.abs();
+
+    let prec = config.decimal_points;
+    let factor = 10f64.powi(prec as i32);
+    let rounded = (abs_amount * factor).round() / factor;
+    let formatted_plain = format!("{:.prec$}", rounded, prec = prec);
+
+    let (int_str, frac_str) = if prec == 0 {
+        (formatted_plain.as_str(), None)
+    } else if let Some((int_part, frac_part)) = formatted_plain.split_once('.') {
+        (int_part, Some(frac_part))
+    } else {
+        (formatted_plain.as_str(), None)
+    };
+
+    let grouped_int = if config.use_thousands_separator && !config.thousands_separator.is_empty() {
+        group_integer_digits(int_str, &config.thousands_separator)
+    } else {
+        int_str.to_string()
+    };
+
+    if let Some(frac) = frac_str {
+        format!("{}{}{}{}", sign, grouped_int, config.decimal_separator, frac)
+    } else {
+        format!("{}{}", sign, grouped_int)
+    }
+}
+
 /// Format a converted amount with appropriate precision and symbols.
 pub fn format_converted(amount: f64, target_code: &str) -> String {
+    let config = get_format_config();
     let upper = target_code.to_uppercase();
     let symbol = get_currency_symbol(&upper);
 
     if upper == "BTC" || upper == "ETH" || upper == "SOL" {
         if amount < 0.0001 {
-            return format!("{:.8} {}", amount, upper);
-        } else if amount < 1.0 {
-            return format!("{:.6} {}", amount, upper);
+            let satoshi_config = CurrencyFormatConfig {
+                decimal_points: 8,
+                ..config.clone()
+            };
+            let formatted_num = format_amount(amount, &satoshi_config);
+            return format!("{} {}", formatted_num, upper);
+        } else if config.decimal_points == 2 {
+            let prec = if amount < 1.0 { 6 } else { 4 };
+            let crypto_config = CurrencyFormatConfig {
+                decimal_points: prec,
+                ..config.clone()
+            };
+            let formatted_num = format_amount(amount, &crypto_config);
+            return format!("{} {}", formatted_num, upper);
         } else {
-            return format!("{:.4} {}", amount, upper);
+            let formatted_num = format_amount(amount, &config);
+            return format!("{} {}", formatted_num, upper);
         }
     }
 
     // Zero-decimal currencies
-    if upper == "JPY" || upper == "KRW" || upper == "VND" || upper == "IDR" || upper == "HUF" || upper == "CLP" {
-        let rounded = amount.round();
-        let formatted_num = format_with_commas(rounded as i64);
+    if (upper == "JPY" || upper == "KRW" || upper == "VND" || upper == "IDR" || upper == "HUF" || upper == "CLP")
+        && config.decimal_points == 2
+    {
+        let zero_dec_config = CurrencyFormatConfig {
+            decimal_points: 0,
+            ..config.clone()
+        };
+        let formatted_num = format_amount(amount, &zero_dec_config);
         if let Some(sym) = symbol {
             return format!("{}{}", sym, formatted_num);
         } else {
@@ -170,46 +336,13 @@ pub fn format_converted(amount: f64, target_code: &str) -> String {
         }
     }
 
-    // Standard 2-decimal fiat currencies
-    let int_part = amount.trunc() as i64;
-    let fract = (amount.fract().abs() * 100.0).round() as i64;
-    let formatted_num = if fract >= 100 {
-        format!("{}.00", format_with_commas(int_part + 1))
-    } else {
-        format!("{}.{:02}", format_with_commas(int_part), fract)
-    };
-
+    let formatted_num = format_amount(amount, &config);
     if let Some(sym) = symbol {
         format!("{}{}", sym, formatted_num)
-    } else {
+    } else if !upper.is_empty() {
         format!("{} {}", formatted_num, upper)
-    }
-}
-
-fn format_with_commas(mut n: i64) -> String {
-    if n == 0 {
-        return "0".to_string();
-    }
-    let is_neg = n < 0;
-    if is_neg {
-        n = -n;
-    }
-    let s = n.to_string();
-    let mut out = String::new();
-    let chars: Vec<char> = s.chars().collect();
-    let len = chars.len();
-
-    for (i, c) in chars.iter().enumerate() {
-        out.push(*c);
-        let rem = len - 1 - i;
-        if rem > 0 && rem % 3 == 0 {
-            out.push(',');
-        }
-    }
-    if is_neg {
-        format!("-{}", out)
     } else {
-        out
+        formatted_num
     }
 }
 
@@ -334,7 +467,7 @@ pub fn canonicalize_currency(raw: &str) -> Option<&'static str> {
         _ => {
             // Check if uppercase matches a known currency in our engine
             let upper = trimmed.to_uppercase();
-            if upper.len() == 3 {
+            if upper.len() >= 3 && upper.len() <= 6 {
                 let engine = global_engine();
                 if let Ok(lock) = engine.read() {
                     if lock.has_currency(&upper) {
@@ -571,5 +704,69 @@ mod tests {
         let (val, why) = res.unwrap();
         assert!(val.starts_with('€') || val.ends_with("EUR"));
         assert!(why.contains("converted 100 USD to EUR"));
+    }
+
+    #[test]
+    fn test_formatting_configurations() {
+        // Comma thousands + period decimal
+        let cfg1 = CurrencyFormatConfig {
+            thousands_separator: ",".to_string(),
+            decimal_separator: ".".to_string(),
+            decimal_points: 2,
+            use_thousands_separator: true,
+        };
+        assert_eq!(format_amount(1250.5, &cfg1), "1,250.50");
+
+        // Space thousands + comma decimal
+        let cfg2 = CurrencyFormatConfig {
+            thousands_separator: " ".to_string(),
+            decimal_separator: ",".to_string(),
+            decimal_points: 2,
+            use_thousands_separator: true,
+        };
+        assert_eq!(format_amount(1250.5, &cfg2), "1 250,50");
+
+        // Period thousands + comma decimal
+        let cfg3 = CurrencyFormatConfig {
+            thousands_separator: ".".to_string(),
+            decimal_separator: ",".to_string(),
+            decimal_points: 2,
+            use_thousands_separator: true,
+        };
+        assert_eq!(format_amount(1250.5, &cfg3), "1.250,50");
+
+        // Zero decimal precision (numberOfDecimalPoints = 0)
+        let cfg0 = CurrencyFormatConfig {
+            thousands_separator: ",".to_string(),
+            decimal_separator: ".".to_string(),
+            decimal_points: 0,
+            use_thousands_separator: true,
+        };
+        assert_eq!(format_amount(1250.5, &cfg0), "1,251");
+
+        // Four decimal precision (numberOfDecimalPoints = 4)
+        let cfg4 = CurrencyFormatConfig {
+            thousands_separator: ",".to_string(),
+            decimal_separator: ".".to_string(),
+            decimal_points: 4,
+            use_thousands_separator: true,
+        };
+        assert_eq!(format_amount(1250.5, &cfg4), "1,250.5000");
+    }
+
+    #[test]
+    fn test_manual_rate_override() {
+        let mut engine = CurrencyEngine::new();
+        // 1 USD = 2.5 TEST
+        engine.set_manual_rate("TEST", 2.5);
+        assert_eq!(engine.convert(100.0, "USD", "TEST"), Some(250.0));
+
+        // Override EUR to 1.0 (parity with USD)
+        engine.set_manual_rate("EUR", 1.0);
+        assert_eq!(engine.convert(100.0, "USD", "EUR"), Some(100.0));
+
+        // Remove override
+        engine.remove_manual_rate("EUR");
+        assert_ne!(engine.convert(100.0, "USD", "EUR"), Some(100.0));
     }
 }

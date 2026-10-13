@@ -28,6 +28,22 @@ interface RatesInfo {
   is_seed: boolean;
 }
 
+interface TriggerConfigDTO {
+  disableAllKeywords: boolean;
+  allowArgumentsAfterKeyword: boolean;
+  sumTriggers: string[];
+  avgTriggers: string[];
+  mathTriggers: string[];
+  countTriggers: string[];
+  listTriggers: string[];
+  checkTriggers: string[];
+  codeTriggers: string[];
+  pasteTriggers: string[];
+  timerTriggers: string[];
+  customKeywordLabel?: string;
+  customKeywordDescription?: string;
+}
+
 // ---------- DOM Elements ----------
 
 const tabButtons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -62,7 +78,19 @@ const selTabWidth = document.getElementById('setting-tab-width') as HTMLSelectEl
 const chkAutoBrackets = document.getElementById('setting-auto-brackets') as HTMLInputElement;
 const chkListCheckboxes = document.getElementById('setting-list-checkboxes') as HTMLInputElement;
 
-// Keywords
+// Keywords & Triggers
+const chkDisableAllKeywords = document.getElementById('setting-disable-all-keywords') as HTMLInputElement;
+const chkAllowArgsAfterKeyword = document.getElementById('setting-allow-args-after-keyword') as HTMLInputElement;
+const inputTriggersSum = document.getElementById('setting-triggers-sum') as HTMLInputElement;
+const inputTriggersAvg = document.getElementById('setting-triggers-avg') as HTMLInputElement;
+const inputTriggersMath = document.getElementById('setting-triggers-math') as HTMLInputElement;
+const inputTriggersCount = document.getElementById('setting-triggers-count') as HTMLInputElement;
+const inputTriggersList = document.getElementById('setting-triggers-list') as HTMLInputElement;
+const inputTriggersCheck = document.getElementById('setting-triggers-check') as HTMLInputElement;
+const inputTriggersCode = document.getElementById('setting-triggers-code') as HTMLInputElement;
+const inputTriggersPaste = document.getElementById('setting-triggers-paste') as HTMLInputElement;
+const inputTriggersTimer = document.getElementById('setting-triggers-timer') as HTMLInputElement;
+
 const chkDetectMath = document.getElementById('setting-detect-math') as HTMLInputElement;
 const chkDetectTimer = document.getElementById('setting-detect-timer') as HTMLInputElement;
 const chkDetectList = document.getElementById('setting-detect-list') as HTMLInputElement;
@@ -250,6 +278,52 @@ async function loadSettings(): Promise<void> {
   // Load live data paths & rates status
   await updateRatesStatus();
   await updateStoragePath();
+  await loadTriggerSettings();
+}
+
+function parseCommaAliases(val: string): string[] {
+  return val.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+async function loadTriggerSettings(): Promise<void> {
+  try {
+    const cfg = await invoke<TriggerConfigDTO>('get_trigger_config');
+    if (!cfg) return;
+    if (chkDisableAllKeywords) chkDisableAllKeywords.checked = !!cfg.disableAllKeywords;
+    if (chkAllowArgsAfterKeyword) chkAllowArgsAfterKeyword.checked = cfg.allowArgumentsAfterKeyword ?? true;
+    if (inputTriggersSum && cfg.sumTriggers) inputTriggersSum.value = cfg.sumTriggers.join(', ');
+    if (inputTriggersAvg && cfg.avgTriggers) inputTriggersAvg.value = cfg.avgTriggers.join(', ');
+    if (inputTriggersMath && cfg.mathTriggers) inputTriggersMath.value = cfg.mathTriggers.join(', ');
+    if (inputTriggersCount && cfg.countTriggers) inputTriggersCount.value = cfg.countTriggers.join(', ');
+    if (inputTriggersList && cfg.listTriggers) inputTriggersList.value = cfg.listTriggers.join(', ');
+    if (inputTriggersCheck && cfg.checkTriggers) inputTriggersCheck.value = cfg.checkTriggers.join(', ');
+    if (inputTriggersCode && cfg.codeTriggers) inputTriggersCode.value = cfg.codeTriggers.join(', ');
+    if (inputTriggersPaste && cfg.pasteTriggers) inputTriggersPaste.value = cfg.pasteTriggers.join(', ');
+    if (inputTriggersTimer && cfg.timerTriggers) inputTriggersTimer.value = cfg.timerTriggers.join(', ');
+  } catch (err) {
+    console.error('Failed to load trigger settings:', err);
+  }
+}
+
+async function saveTriggerSettings(): Promise<void> {
+  const config: TriggerConfigDTO = {
+    disableAllKeywords: chkDisableAllKeywords ? chkDisableAllKeywords.checked : false,
+    allowArgumentsAfterKeyword: chkAllowArgsAfterKeyword ? chkAllowArgsAfterKeyword.checked : true,
+    sumTriggers: parseCommaAliases(inputTriggersSum?.value || 'sum, total, add'),
+    avgTriggers: parseCommaAliases(inputTriggersAvg?.value || 'avg, average'),
+    mathTriggers: parseCommaAliases(inputTriggersMath?.value || 'math, convert, model'),
+    countTriggers: parseCommaAliases(inputTriggersCount?.value || 'count'),
+    listTriggers: parseCommaAliases(inputTriggersList?.value || 'list'),
+    checkTriggers: parseCommaAliases(inputTriggersCheck?.value || 'check, todo'),
+    codeTriggers: parseCommaAliases(inputTriggersCode?.value || 'code'),
+    pasteTriggers: parseCommaAliases(inputTriggersPaste?.value || 'paste'),
+    timerTriggers: parseCommaAliases(inputTriggersTimer?.value || 'timer'),
+  };
+  try {
+    await invoke('set_trigger_config', { config });
+  } catch (err) {
+    console.error('Failed to save trigger settings:', err);
+  }
 }
 
 function applyTheme(theme: string): void {
@@ -342,6 +416,19 @@ function wireEvents(): void {
   selTabWidth?.addEventListener('change', () => saveSetting('tab_width', selTabWidth.value));
   chkAutoBrackets?.addEventListener('change', () => saveSetting('auto_brackets', chkAutoBrackets.checked));
   chkListCheckboxes?.addEventListener('change', () => saveSetting('list_checkboxes', chkListCheckboxes.checked));
+
+  // Trigger Controls & Aliases
+  chkDisableAllKeywords?.addEventListener('change', () => saveTriggerSettings());
+  chkAllowArgsAfterKeyword?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersSum?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersAvg?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersMath?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersCount?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersList?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersCheck?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersCode?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersPaste?.addEventListener('change', () => saveTriggerSettings());
+  inputTriggersTimer?.addEventListener('change', () => saveTriggerSettings());
 
   // Keywords & Math
   chkDetectMath?.addEventListener('change', () => saveSetting('detect_math', chkDetectMath.checked));

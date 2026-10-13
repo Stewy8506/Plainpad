@@ -3,6 +3,7 @@
 //! short-circuits everything. Text is never changed here — we only annotate.
 
 use crate::mathwrap::{self, Vars};
+use crate::trigger_config::{TriggerCategory, TriggerConfig};
 use serde::Serialize;
 use std::time::Instant;
 
@@ -35,21 +36,32 @@ pub struct Analysis {
     pub elapsed_us: u128,
 }
 
-/// Analyze a note. `plain` = per-note or global plain mode: zero work, zero
-/// annotations (PRD L-3). Never mutates text; runs in microseconds for
-/// scratchpad-sized notes so it can run on every keystroke off the input path.
+/// Analyze a note using default trigger configuration.
 pub fn analyze(text: &str, plain: bool) -> Analysis {
+    analyze_with_config(text, plain, &TriggerConfig::default())
+}
+
+/// Analyze a note with specific `TriggerConfig`.
+/// `plain` = per-note or global plain mode: zero work, zero annotations (PRD L-3).
+pub fn analyze_with_config(text: &str, plain: bool, config: &TriggerConfig) -> Analysis {
     let start = Instant::now();
     if plain {
-        return Analysis { annotations: Vec::new(), code_mode: false, code_lang: String::new(), elapsed_us: 0 };
+        return Analysis {
+            annotations: Vec::new(),
+            code_mode: false,
+            code_lang: String::new(),
+            elapsed_us: 0,
+        };
     }
     let lines: Vec<&str> = text.lines().collect();
+
+    let first_nonempty_idx = lines.iter().position(|l| !l.trim().is_empty());
 
     // Explicit mode word on the first non-empty line: `math`, `list`, `code: bash`.
     let mut forced = ForcedMode::None;
     let mut forced_lang = String::new();
-    if let Some(first) = lines.iter().find(|l| !l.trim().is_empty()) {
-        let t = first.trim().to_lowercase();
+    if let Some(first_idx) = first_nonempty_idx {
+        let t = lines[first_idx].trim().to_lowercase();
         if t == "math" || t == "calcs" || t == "sum" {
             forced = ForcedMode::Math;
         } else if t == "list" {
@@ -74,35 +86,242 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
         }
         nonempty += 1;
 
-        if is_mode_word(t) {
+        // First non-empty line mode declaration skips annotation processing if mode word
+        if Some(i) == first_nonempty_idx && is_first_line_mode_word(t) {
             continue;
+        }
+
+        // Check natural-language sentence triggers
+        if !config.disable_all_keywords {
+            if let Some((category, _kw, remaining_args)) = config.match_trigger(t) {
+                match category {
+                    TriggerCategory::Sum => {
+                        let preceding = extract_preceding_block(&lines, i, config);
+                        if let Some(formatted) = compute_block_sum(&lines, &preceding, &annotations, &vars) {
+                            annotations.push(Annotation {
+                                line: i,
+                                kind: "math",
+                                confidence: 0.95,
+                                value: formatted,
+                                chip: String::new(),
+                                why: "sum of numbers and currencies in preceding paragraph or list".into(),
+                            });
+                            continue;
+                        }
+                    }
+                    TriggerCategory::Avg => {
+                        let preceding = extract_preceding_block(&lines, i, config);
+                        if let Some(formatted) = compute_block_avg(&lines, &preceding, &annotations, &vars) {
+                            annotations.push(Annotation {
+                                line: i,
+                                kind: "math",
+                                confidence: 0.95,
+                                value: formatted,
+                                chip: String::new(),
+                                why: "arithmetic mean of values in preceding paragraph or list".into(),
+                            });
+                            continue;
+                        }
+                    }
+                    TriggerCategory::Count => {
+                        let preceding = extract_preceding_block(&lines, i, config);
+                        let count = compute_block_count(&preceding);
+                        let label = if count == 1 { "1 item".to_string() } else { format!("{count} items") };
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "stats",
+                            confidence: 0.95,
+                            value: label,
+                            chip: String::new(),
+                            why: "count of items in preceding list".into(),
+                        });
+                        continue;
+                    }
+                    TriggerCategory::Math => {
+                        if !remaining_args.is_empty() {
+                            if let Some((res, why)) = crate::currency::evaluate_currency(remaining_args) {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "math",
+                                    confidence: 0.95,
+                                    value: res,
+                                    chip: String::new(),
+                                    why,
+                                });
+                                continue;
+                            }
+                            if let Some((res, why)) = crate::units::parse_and_convert(remaining_args) {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "math",
+                                    confidence: 0.95,
+                                    value: res,
+                                    chip: String::new(),
+                                    why,
+                                });
+                                continue;
+                            }
+                            if let Some(res) = mathwrap::base_conversion(remaining_args) {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "math",
+                                    confidence: 0.95,
+                                    value: res,
+                                    chip: String::new(),
+                                    why: "base conversion".into(),
+                                });
+                                continue;
+                            }
+                            if let Some(out) = mathwrap::eval_line(remaining_args, &vars) {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "math",
+                                    confidence: 0.95,
+                                    value: out.result,
+                                    chip: String::new(),
+                                    why: "evaluated math expression".into(),
+                                });
+                                continue;
+                            }
+                            if let Ok(out) = mathwrap::evaluate(remaining_args) {
+                                let res = out.result.trim().to_string();
+                                if !res.is_empty() {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "math",
+                                        confidence: 0.95,
+                                        value: res,
+                                        chip: String::new(),
+                                        why: "evaluated math expression".into(),
+                                    });
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    TriggerCategory::List => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "list",
+                            confidence: 0.85,
+                            value: String::new(),
+                            chip: "Convert to bullet list (Tab)".into(),
+                            why: "list trigger keyword".into(),
+                        });
+                        continue;
+                    }
+                    TriggerCategory::Check => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "checklist",
+                            confidence: 0.85,
+                            value: String::new(),
+                            chip: "Convert to checklist (Tab)".into(),
+                            why: "check trigger keyword".into(),
+                        });
+                        continue;
+                    }
+                    TriggerCategory::Code => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "code",
+                            confidence: 0.85,
+                            value: remaining_args.trim().to_string(),
+                            chip: "Format as code block (Tab)".into(),
+                            why: "code trigger keyword".into(),
+                        });
+                        continue;
+                    }
+                    TriggerCategory::Paste => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "paste",
+                            confidence: 0.95,
+                            value: String::new(),
+                            chip: "Start AutoPaste (Enter)".into(),
+                            why: "trigger for continuous clipboard capture".into(),
+                        });
+                        continue;
+                    }
+                    TriggerCategory::Timer => {
+                        if crate::timers::is_timer_stop_phrase(t) {
+                            annotations.push(Annotation {
+                                line: i,
+                                kind: "timer_stop",
+                                confidence: 0.95,
+                                value: String::new(),
+                                chip: "Stop timer (Enter)".into(),
+                                why: "phrase to stop running timer".into(),
+                            });
+                            continue;
+                        }
+                        if !remaining_args.is_empty() {
+                            let phrase = format!("timer {}", remaining_args);
+                            if let Some((name, ms)) = crate::timers::parse_timer_phrase(&phrase) {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "timer",
+                                    confidence: 0.95,
+                                    value: format_duration(ms),
+                                    chip: format!("Start timer ({}) (Enter)", if name == "Timer" { format_duration(ms) } else { name }),
+                                    why: "starts with 'timer' followed by duration".into(),
+                                });
+                                continue;
+                            } else {
+                                annotations.push(Annotation {
+                                    line: i,
+                                    kind: "timer",
+                                    confidence: 0.95,
+                                    value: remaining_args.to_string(),
+                                    chip: format!("Start timer ({}) (Enter)", remaining_args),
+                                    why: "timer trigger keyword".into(),
+                                });
+                                continue;
+                            }
+                        } else {
+                            annotations.push(Annotation {
+                                line: i,
+                                kind: "timer",
+                                confidence: 0.95,
+                                value: "00:00".into(),
+                                chip: "Start stopwatch (Enter)".into(),
+                                why: "starts a stopwatch".into(),
+                            });
+                            continue;
+                        }
+                    }
+                }
+            }
         }
 
         // Timers (explicit phrases only — starting one by accident would be rude).
-        if crate::timers::is_timer_stop_phrase(t) {
-            annotations.push(Annotation {
-                line: i,
-                kind: "timer_stop",
-                confidence: 0.95,
-                value: String::new(),
-                chip: "Stop timer (Enter)".into(),
-                why: "phrase to stop running timer".into(),
-            });
-            continue;
-        }
+        if !config.disable_all_keywords {
+            if crate::timers::is_timer_stop_phrase(t) {
+                annotations.push(Annotation {
+                    line: i,
+                    kind: "timer_stop",
+                    confidence: 0.95,
+                    value: String::new(),
+                    chip: "Stop timer (Enter)".into(),
+                    why: "phrase to stop running timer".into(),
+                });
+                continue;
+            }
 
-        if let Some((name, ms)) = crate::timers::parse_timer_phrase(t) {
-            annotations.push(Annotation {
-                line: i, kind: "timer", confidence: 0.95,
-                value: format_duration(ms),
-                chip: format!("Start timer ({})", if name == "Timer" { format_duration(ms) } else { name.clone() }),
-                why: "starts with 'timer' or 'remind me in' followed by a duration".into(),
-            });
-            continue;
+            if let Some((name, ms)) = crate::timers::parse_timer_phrase(t) {
+                annotations.push(Annotation {
+                    line: i, kind: "timer", confidence: 0.95,
+                    value: format_duration(ms),
+                    chip: format!("Start timer ({})", if name == "Timer" { format_duration(ms) } else { name.clone() }),
+                    why: "starts with 'timer' or 'remind me in' followed by a duration".into(),
+                });
+                continue;
+            }
         }
 
         // Checklists: explicit prefix or todo phrase.
-        if t.starts_with("[ ] ") || t.starts_with("[x] ") || t.starts_with("[X] ") {
+        if t.starts_with("[ ] ") || t.starts_with("[x] ") || t.starts_with("[X] ")
+            || t.starts_with("- [ ] ") || t.starts_with("- [x] ") || t.starts_with("- [X] ") {
             annotations.push(Annotation {
                 line: i, kind: "checklist", confidence: 1.0, value: String::new(), chip: String::new(),
                 why: "line starts with a checkbox marker".into(),
@@ -117,26 +336,6 @@ pub fn analyze(text: &str, plain: bool) -> Analysis {
                 why: "starts with the word 'todo'".into(),
             });
             continue;
-        }
-
-        // Running totals: `total` or `sum` over previous lines (Antinote feature)
-        if (lower == "total" || lower == "sum") && i > 0 {
-            if let Some(s) = compute_running_total(&lines, i, &annotations, &vars) {
-                let formatted = if s.fract() == 0.0 {
-                    format!("{}", s as i64)
-                } else {
-                    format!("{:.2}", s)
-                };
-                annotations.push(Annotation {
-                    line: i,
-                    kind: "math",
-                    confidence: 0.95,
-                    value: formatted,
-                    chip: String::new(),
-                    why: "sum of numbers and evaluated results on preceding lines".into(),
-                });
-                continue;
-            }
         }
 
         // Physical unit conversion (Distance, Area, Mass, Volume, Temperature)
@@ -206,70 +405,271 @@ enum ForcedMode {
     Code,
 }
 
-fn is_mode_word(t: &str) -> bool {
+fn is_first_line_mode_word(t: &str) -> bool {
     let l = t.to_lowercase();
-    l == "math"
-        || l == "calcs"
-        || l == "sum"
-        || l == "list"
-        || l == "code"
-        || l == "paste"
-        || l.starts_with("code:")
+    l == "math" || l == "calcs"
 }
 
-fn compute_running_total(
-    lines: &[&str],
-    current_idx: usize,
+/// Extracts preceding block lines within the same paragraph/list scope.
+/// Scans upward from `trigger_idx - 1` until reaching an empty line (after entering the block),
+/// a markdown heading (`#`), or another trigger line. Returns lines in top-to-bottom order with indices.
+pub fn extract_preceding_block<'a>(
+    lines: &[&'a str],
+    trigger_idx: usize,
+    config: &TriggerConfig,
+) -> Vec<(usize, &'a str)> {
+    if trigger_idx == 0 {
+        return Vec::new();
+    }
+    let mut block = Vec::new();
+    let mut entered_block = false;
+
+    for j in (0..trigger_idx).rev() {
+        let raw = lines[j];
+        let t = raw.trim();
+        if t.is_empty() {
+            if entered_block {
+                break;
+            }
+            continue;
+        }
+        if t.starts_with('#') {
+            break;
+        }
+        if !config.disable_all_keywords && config.match_trigger(t).is_some() {
+            break;
+        }
+        if t.starts_with("//") {
+            continue;
+        }
+        entered_block = true;
+        block.push((j, raw));
+    }
+    block.reverse();
+    block
+}
+
+fn extract_currency_symbol(s: &str) -> Option<String> {
+    for sym in ["$", "€", "£", "₹", "¥", "₩", "₿"] {
+        if s.contains(sym) {
+            return Some(sym.to_string());
+        }
+    }
+    for code in ["USD", "EUR", "GBP", "INR", "JPY", "CAD", "AUD", "NZD", "CHF", "CNY"] {
+        if s.contains(code) {
+            let sym = match code {
+                "USD" | "CAD" | "AUD" | "NZD" => "$",
+                "EUR" => "€",
+                "GBP" => "£",
+                "INR" => "₹",
+                "JPY" | "CNY" => "¥",
+                _ => return Some(code.to_string()),
+            };
+            return Some(sym.to_string());
+        }
+    }
+    None
+}
+
+fn parse_line_amount_and_currency(line: &str) -> Option<(f64, Option<String>, bool)> {
+    let t = line.trim();
+    if t.is_empty() || t.starts_with("//") {
+        return None;
+    }
+
+    let line_sym = extract_currency_symbol(t);
+    let tokens: Vec<&str> = t.split_whitespace().collect();
+
+    let mut candidates = Vec::new();
+    for token in tokens {
+        let cleaned_punct = token.trim_matches(|c: char| c == ':' || c == ';' || c == ',');
+        if cleaned_punct.is_empty() {
+            continue;
+        }
+        let token_sym = extract_currency_symbol(cleaned_punct);
+        let num_str = cleaned_punct.replace(['$', '€', '£', '₹', '¥', '₩', '₿', ','], "");
+        if let Ok(v) = num_str.parse::<f64>() {
+            let has_dec = num_str.contains('.');
+            let sym = token_sym.or_else(|| line_sym.clone());
+            candidates.push((v, sym, has_dec));
+        }
+    }
+
+    if let Some(c) = candidates.iter().find(|(_, s, _)| s.is_some()) {
+        return Some(c.clone());
+    }
+    candidates.last().cloned()
+}
+
+fn compute_block_sum(
+    _lines: &[&str],
+    preceding: &[(usize, &str)],
     annotations: &[Annotation],
     vars: &Vars,
-) -> Option<f64> {
+) -> Option<String> {
+    if preceding.is_empty() {
+        return None;
+    }
     let mut total = 0.0;
     let mut count = 0usize;
+    let mut currencies: Vec<String> = Vec::new();
+    let mut any_decimals = false;
 
-    for j in 0..current_idx {
-        let line = lines[j].trim();
-        if line.is_empty() || line.starts_with("//") {
-            continue;
-        }
-        let lower = line.to_lowercase();
-        if is_mode_word(line) || lower == "total" || lower == "sum" {
-            continue;
-        }
+    for &(idx, raw_line) in preceding {
+        let line = raw_line.trim();
 
-        // 1. If line j produced an evaluated math annotation, use its calculated result!
-        // E.g. "200 * 120050 =" produced value "24,010,000" or "24010000"
-        if let Some(anno) = annotations.iter().find(|a| a.line == j && a.kind == "math") {
-            let cleaned = anno.value.replace(',', "").trim().to_string();
-            if let Ok(v) = cleaned.parse::<f64>() {
+        // 1. Line already evaluated as math or conversion
+        if let Some(anno) = annotations.iter().find(|a| a.line == idx && (a.kind == "math" || a.kind == "conversion")) {
+            let val = &anno.value;
+            let sym = extract_currency_symbol(val);
+            let cleaned = val.replace(['$', '€', '£', '₹', '¥', '₩', '₿', ','], "");
+            if let Ok(v) = cleaned.trim().parse::<f64>() {
                 total += v;
                 count += 1;
+                if val.contains('.') {
+                    any_decimals = true;
+                }
+                if let Some(s) = sym {
+                    currencies.push(s);
+                }
                 continue;
             }
         }
 
-        // 2. Or try evaluating line j as math directly
+        // 2. Math evaluation of line
         if let Some(out) = mathwrap::eval_line(line, vars) {
-            let cleaned = out.result.replace(',', "").trim().to_string();
-            if let Ok(v) = cleaned.parse::<f64>() {
+            let sym = extract_currency_symbol(&out.result).or_else(|| extract_currency_symbol(line));
+            let cleaned = out.result.replace(['$', '€', '£', '₹', '¥', '₩', '₿', ','], "");
+            if let Ok(v) = cleaned.trim().parse::<f64>() {
                 total += v;
                 count += 1;
+                if out.result.contains('.') {
+                    any_decimals = true;
+                }
+                if let Some(s) = sym {
+                    currencies.push(s);
+                }
                 continue;
             }
         }
 
-        // 3. Fallback: parse numbers / currency from labelled line e.g. `$10 books`, `food 4500`
-        let nums = mathwrap::parse_leading_number(line);
-        if let Some(&n) = nums.first() {
-            total += n;
+        // 3. Fallback: parse amount and currency
+        if let Some((amount, sym, has_dec)) = parse_line_amount_and_currency(line) {
+            total += amount;
             count += 1;
+            if has_dec {
+                any_decimals = true;
+            }
+            if let Some(s) = sym {
+                currencies.push(s);
+            }
         }
     }
 
-    if count > 0 {
-        Some(total)
-    } else {
-        None
+    if count == 0 {
+        return None;
     }
+
+    let common_sym = if !currencies.is_empty() && currencies.iter().all(|c| c == &currencies[0]) {
+        currencies[0].as_str()
+    } else {
+        ""
+    };
+
+    let formatted = if any_decimals || total.fract().abs() > 1e-9 {
+        format!("{}{:.2}", common_sym, total)
+    } else {
+        format!("{}{}", common_sym, total.round() as i64)
+    };
+
+    Some(formatted)
+}
+
+fn compute_block_avg(
+    _lines: &[&str],
+    preceding: &[(usize, &str)],
+    annotations: &[Annotation],
+    vars: &Vars,
+) -> Option<String> {
+    if preceding.is_empty() {
+        return None;
+    }
+    let mut total = 0.0;
+    let mut count = 0usize;
+    let mut currencies: Vec<String> = Vec::new();
+
+    for &(idx, raw_line) in preceding {
+        let line = raw_line.trim();
+
+        if let Some(anno) = annotations.iter().find(|a| a.line == idx && (a.kind == "math" || a.kind == "conversion")) {
+            let val = &anno.value;
+            let sym = extract_currency_symbol(val);
+            let cleaned = val.replace(['$', '€', '£', '₹', '¥', '₩', '₿', ','], "");
+            if let Ok(v) = cleaned.trim().parse::<f64>() {
+                total += v;
+                count += 1;
+                if let Some(s) = sym {
+                    currencies.push(s);
+                }
+                continue;
+            }
+        }
+
+        if let Some(out) = mathwrap::eval_line(line, vars) {
+            let sym = extract_currency_symbol(&out.result).or_else(|| extract_currency_symbol(line));
+            let cleaned = out.result.replace(['$', '€', '£', '₹', '¥', '₩', '₿', ','], "");
+            if let Ok(v) = cleaned.trim().parse::<f64>() {
+                total += v;
+                count += 1;
+                if let Some(s) = sym {
+                    currencies.push(s);
+                }
+                continue;
+            }
+        }
+
+        if let Some((amount, sym, _)) = parse_line_amount_and_currency(line) {
+            total += amount;
+            count += 1;
+            if let Some(s) = sym {
+                currencies.push(s);
+            }
+        }
+    }
+
+    if count == 0 {
+        return None;
+    }
+
+    let avg = total / count as f64;
+    let common_sym = if !currencies.is_empty() && currencies.iter().all(|c| c == &currencies[0]) {
+        currencies[0].as_str()
+    } else {
+        ""
+    };
+
+    let formatted = if avg.fract().abs() < 1e-9 {
+        format!("{}{}", common_sym, avg.round() as i64)
+    } else {
+        format!("{}{:.2}", common_sym, avg)
+    };
+
+    Some(formatted)
+}
+
+fn compute_block_count(preceding: &[(usize, &str)]) -> usize {
+    if preceding.is_empty() {
+        return 0;
+    }
+    if preceding.len() == 1 {
+        let single = preceding[0].1.trim();
+        let items: Vec<&str> = single.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        if items.len() > 1 {
+            return items.len();
+        }
+        return 1;
+    }
+    preceding.len()
 }
 
 /// Classify a line as math/conversion. Returns (kind, confidence, value, why).

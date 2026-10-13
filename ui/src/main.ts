@@ -485,10 +485,13 @@ function scheduleAnalyze(): void {
   analyzeTimeout = setTimeout(() => runAnalysis(), 35);
 }
 
+let lastAnalysis: Analysis | null = null;
+
 async function runAnalysis(): Promise<void> {
   const text = editor.value;
   const plain = currentPlain || globalPlain;
   const analysis = await invoke<Analysis>('analyze_note', { text, plain });
+  lastAnalysis = analysis || null;
   if (!analysis) {
     for (const child of Array.from(overlay.children) as HTMLElement[]) {
       triggerExit(child);
@@ -546,6 +549,16 @@ function updateBackdrop(): void {
     // Comment lines (// ...)
     if (trimmed.startsWith('//')) {
       return `<span class="hl-comment">${escapeHtml(line)}</span>`;
+    }
+
+    // Natural-language trigger keywords anywhere in note
+    const triggerKws = [
+      'sum', 'total', 'add', 'avg', 'average', 'math', 'calcs',
+      'convert', 'count', 'list', 'check', 'todo', 'code', 'paste', 'timer',
+    ];
+    const firstWord = lower.split(/[\s:]/)[0];
+    if (triggerKws.includes(firstWord)) {
+      return `<span class="hl-mode hl-mode-trigger hl-mode-${firstWord}">${escapeHtml(line)}</span>`;
     }
 
     // Variable / label lines: e.g. "trees: 23,405" or "rent = 12000"
@@ -855,24 +868,148 @@ function toggleCheckbox(lineIndex: number): void {
 
 // ---------- Accept chip (Tab on suggestion) ----------
 
+function triggerAutoPaste(): void {
+  window.dispatchEvent(new CustomEvent('autopaste-trigger'));
+  console.log('[AutoPaste] Trigger activated');
+}
+
 function acceptChip(lineIndex: number, text: string): void {
   const lines = editor.value.split('\n');
   if (lineIndex >= lines.length) return;
   const line = lines[lineIndex];
+  const trimmed = line.trim();
+  const lower = trimmed.toLowerCase();
 
-  // Timer line: start timer
-  if (line.toLowerCase().startsWith('timer') || line.toLowerCase().startsWith('remind')) {
+  const anno = lastAnalysis?.annotations?.find((a) => a.line === lineIndex);
+  const kind = anno?.kind || '';
+
+  // 1. Timer line
+  if (kind === 'timer' || lower.startsWith('timer') || lower.startsWith('remind')) {
     startTimerFromLine(lineIndex);
     return;
   }
+  if (kind === 'timer_stop' || lower === 'stop timer') {
+    stopActiveTimer();
+    return;
+  }
 
-  // "Make checklist" → convert comma-list or "todo" to checkboxes
+  // 2. Paste / AutoPaste trigger
+  if (kind === 'paste' || lower === 'paste') {
+    triggerAutoPaste();
+    if (lower === 'paste') {
+      lines.splice(lineIndex, 1);
+      editor.value = lines.join('\n');
+      updateBackdrop();
+      scheduleSave();
+      scheduleAnalyze();
+    }
+    return;
+  }
+
+  // Helper to extract preceding non-empty paragraph block lines
+  const getPrecedingBlockRange = (): { start: number; end: number } => {
+    let start = lineIndex;
+    for (let j = lineIndex - 1; j >= 0; j--) {
+      const l = lines[j].trim();
+      if (!l || l.startsWith('#')) break;
+      start = j;
+    }
+    return { start, end: lineIndex - 1 };
+  };
+
+  // 3. List chip: convert preceding lines of the paragraph block into bullet list items (- <item>)
+  if (kind === 'list' || lower === 'list') {
+    const { start, end } = getPrecedingBlockRange();
+    if (end >= start) {
+      for (let j = start; j <= end; j++) {
+        const item = lines[j].trimStart();
+        if (item.startsWith('- ')) continue;
+        if (item.startsWith('* ')) {
+          lines[j] = '- ' + item.substring(2);
+        } else {
+          lines[j] = '- ' + item;
+        }
+      }
+      lines.splice(lineIndex, 1);
+    } else {
+      lines[lineIndex] = '- ';
+    }
+    editor.value = lines.join('\n');
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // 4. Checklist chip: convert preceding lines of the paragraph block into checkboxes (- [ ] <item>)
+  if (kind === 'checklist' || lower === 'check' || lower === 'todo') {
+    const { start, end } = getPrecedingBlockRange();
+    if (end >= start) {
+      for (let j = start; j <= end; j++) {
+        const item = lines[j].trimStart();
+        if (item.startsWith('- [ ] ') || item.startsWith('[ ] ') || item.startsWith('- [x] ') || item.startsWith('[x] ')) {
+          continue;
+        }
+        lines[j] = '- [ ] ' + item.replace(/^[-*]\s+/, '');
+      }
+      lines.splice(lineIndex, 1);
+    } else if (text.toLowerCase().startsWith('todo ')) {
+      lines[lineIndex] = '- [ ] ' + line.substring(line.toLowerCase().indexOf('todo ') + 5);
+    } else if (line.includes(',')) {
+      const items = line.split(',').map((s) => s.trim()).filter(Boolean);
+      lines.splice(lineIndex, 1, ...items.map((item) => `- [ ] ${item}`));
+    } else {
+      lines[lineIndex] = '- [ ] ';
+    }
+    editor.value = lines.join('\n');
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // 5. Code chip: format target lines into fenced code block ```<lang>\n...\n```
+  if (kind === 'code' || lower.startsWith('code')) {
+    const lang = anno?.value?.trim() || lower.replace(/^code:?/, '').trim();
+    const { start, end } = getPrecedingBlockRange();
+    if (end >= start) {
+      const blockCode = lines.slice(start, end + 1).join('\n');
+      const fenced = `\`\`\`${lang}\n${blockCode}\n\`\`\``;
+      lines.splice(start, end - start + 2, fenced);
+    } else {
+      lines[lineIndex] = `\`\`\`${lang}\n\n\`\`\``;
+    }
+    editor.value = lines.join('\n');
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // 6. Math / sum / avg / count evaluation chip: append evaluated result onto line
+  if (anno && anno.value) {
+    if (line.trim().endsWith('=')) {
+      lines[lineIndex] = `${line} ${anno.value}`;
+    } else if (line.trim().endsWith(':')) {
+      lines[lineIndex] = `${line} ${anno.value}`;
+    } else if (lower === 'sum' || lower === 'total' || lower === 'add' || lower === 'avg' || lower === 'average' || lower === 'count') {
+      lines[lineIndex] = `${line}: ${anno.value}`;
+    } else {
+      lines[lineIndex] = `${line} = ${anno.value}`;
+    }
+    editor.value = lines.join('\n');
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // Fallback for comma list or todo
   if (text.toLowerCase().startsWith('todo ')) {
-    lines[lineIndex] = '[ ] ' + line.substring(line.toLowerCase().indexOf('todo ') + 5);
+    lines[lineIndex] = '- [ ] ' + line.substring(line.toLowerCase().indexOf('todo ') + 5);
   } else if (line.includes(',')) {
-    // Comma list → multiple checkbox lines
     const items = line.split(',').map((s) => s.trim()).filter(Boolean);
-    lines.splice(lineIndex, 1, ...items.map((item) => `[ ] ${item}`));
+    lines.splice(lineIndex, 1, ...items.map((item) => `- [ ] ${item}`));
   }
 
   editor.value = lines.join('\n');

@@ -513,6 +513,11 @@ body.ctrl-held #bottom-bar {
 .hl-mode-list  { color: var(--hl-list); }
 .hl-mode-paste { color: var(--hl-math); }
 .hl-mode-code  { color: var(--hl-code); }
+.hl-mode-trigger { color: var(--hl-calcs); font-weight: 500; }
+.hl-mode-avg   { color: var(--hl-calcs); }
+.hl-mode-count { color: var(--hl-list); }
+.hl-mode-check { color: var(--hl-list); }
+.hl-mode-timer { color: var(--hl-math); }
 
 .hl-comment {
   color: var(--text-muted);

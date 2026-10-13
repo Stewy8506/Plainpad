@@ -12,11 +12,13 @@ pub mod model;
 pub mod store;
 pub mod sync;
 pub mod timers;
+pub mod trigger_config;
 pub mod units;
 
 pub use model::{
     now_iso, title_from_text, Antilink, Attachment, ChecklistItem, Note, NoteMeta, SyncState,
 };
+pub use trigger_config::{TriggerCategory, TriggerConfig};
 
 use serde::{Deserialize, Serialize};
 

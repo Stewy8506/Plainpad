@@ -284,8 +284,45 @@ fn set_plain(
 }
 
 #[tauri::command]
-fn analyze_note(text: String, plain: bool) -> intent::Analysis {
-    intent::analyze(&text, plain)
+fn analyze_note(
+    text: String,
+    plain: bool,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> intent::Analysis {
+    let settings = state
+        .lock()
+        .unwrap()
+        .store
+        .get_settings()
+        .unwrap_or_default();
+    let config = plainpad_core::trigger_config::TriggerConfig::from_settings(&settings);
+    intent::analyze_with_config(&text, plain, &config)
+}
+
+#[tauri::command]
+fn get_trigger_config(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<plainpad_core::trigger_config::TriggerConfig, String> {
+    let settings = state
+        .lock()
+        .unwrap()
+        .store
+        .get_settings()
+        .map_err(|e| e.to_string())?;
+    Ok(plainpad_core::trigger_config::TriggerConfig::from_settings(&settings))
+}
+
+#[tauri::command]
+fn set_trigger_config(
+    config: plainpad_core::trigger_config::TriggerConfig,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let map = config.to_settings();
+    let lock = state.lock().unwrap();
+    for (k, v) in map {
+        lock.store.set_setting(&k, v).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1002,6 +1039,8 @@ fn main() {
             restore_from_snapshot,
             list_slotted_notes,
             get_slotted_note,
+            get_trigger_config,
+            set_trigger_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

@@ -333,6 +333,31 @@
     <!-- TAB 4: KEYWORDS & MATH -->
     <section id="panel-keywords" class="tab-panel" role="tabpanel">
       <div class="settings-section">
+        <h3 class="section-title">Master Keyword Controls</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Disable All Keywords</span>
+            <span class="setting-desc">Master toggle to disable all trigger processing note-wide</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-disable-all-keywords" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Allow Arguments After Keywords</span>
+            <span class="setting-desc">Permit inline trailing arguments after trigger words (e.g. 'math 12 * 4', 'timer 5m')</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-allow-args-after-keyword" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
         <h3 class="section-title">Intelligent Detection Words</h3>
         <div class="setting-row">
           <div class="setting-meta">
@@ -376,6 +401,81 @@
             <input type="checkbox" id="setting-detect-code" checked />
             <span class="slider"></span>
           </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Trigger Aliases (Comma-Separated)</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Sum Triggers</span>
+            <span class="setting-desc">Aggregates numbers and currencies in preceding block</span>
+          </div>
+          <input type="text" id="setting-triggers-sum" class="text-input" placeholder="sum, total, add" value="sum, total, add" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Average Triggers</span>
+            <span class="setting-desc">Arithmetic mean of values in preceding block</span>
+          </div>
+          <input type="text" id="setting-triggers-avg" class="text-input" placeholder="avg, average" value="avg, average" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Math Triggers</span>
+            <span class="setting-desc">Inline math, unit conversions, and calculations</span>
+          </div>
+          <input type="text" id="setting-triggers-math" class="text-input" placeholder="math, convert, model" value="math, convert, model" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Count Triggers</span>
+            <span class="setting-desc">Item and list line count in preceding block</span>
+          </div>
+          <input type="text" id="setting-triggers-count" class="text-input" placeholder="count" value="count" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">List Triggers</span>
+            <span class="setting-desc">Transform preceding lines into bullet list items</span>
+          </div>
+          <input type="text" id="setting-triggers-list" class="text-input" placeholder="list" value="list" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Check Triggers</span>
+            <span class="setting-desc">Transform items into interactive checklist checkboxes</span>
+          </div>
+          <input type="text" id="setting-triggers-check" class="text-input" placeholder="check, todo" value="check, todo" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Code Triggers</span>
+            <span class="setting-desc">Format target lines into fenced code block</span>
+          </div>
+          <input type="text" id="setting-triggers-code" class="text-input" placeholder="code" value="code" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Paste Triggers</span>
+            <span class="setting-desc">Trigger continuous clipboard capture (AutoPaste)</span>
+          </div>
+          <input type="text" id="setting-triggers-paste" class="text-input" placeholder="paste" value="paste" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Timer Triggers</span>
+            <span class="setting-desc">Parse and start inline timers and stopwatches</span>
+          </div>
+          <input type="text" id="setting-triggers-timer" class="text-input" placeholder="timer" value="timer" style="width: 200px; padding: 6px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-btn); color: var(--text-primary);" />
         </div>
       </div>
 

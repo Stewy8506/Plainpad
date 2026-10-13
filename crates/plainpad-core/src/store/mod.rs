@@ -2,10 +2,12 @@ pub mod file;
 pub mod notes;
 pub mod relational;
 pub mod schema;
+pub mod snapshot;
 pub mod void;
 
 pub use file::{content_hash, FileStore, FileStoreMeta, FileStoreNote};
 pub use schema::{get_user_version, run_migrations, set_user_version, CURRENT_SCHEMA_VERSION};
+pub use snapshot::SnapshotMeta;
 
 use rusqlite::Connection;
 use std::fmt;
@@ -66,6 +68,7 @@ impl From<std::io::Error> for StoreError {
 #[derive(Clone)]
 pub struct SqliteStore {
     conn: Arc<Mutex<Connection>>,
+    path: Option<std::path::PathBuf>,
 }
 
 impl SqliteStore {
@@ -82,6 +85,7 @@ impl SqliteStore {
         schema::run_migrations(&conn)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            path: Some(path.to_path_buf()),
         })
     }
 
@@ -93,7 +97,13 @@ impl SqliteStore {
         schema::run_migrations(&conn)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
+            path: None,
         })
+    }
+
+    /// Returns the filesystem path to the database file, if opened on disk.
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
 
     /// Returns a reference to the shared Connection mutex.

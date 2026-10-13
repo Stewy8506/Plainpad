@@ -1,5 +1,7 @@
 pub mod file;
+pub mod notes;
 pub mod schema;
+pub mod void;
 
 pub use file::{content_hash, FileStore, FileStoreMeta, FileStoreNote};
 pub use schema::{get_user_version, run_migrations, set_user_version, CURRENT_SCHEMA_VERSION};
@@ -17,6 +19,7 @@ pub enum StoreError {
     Migration(String),
     NoteLocked,
     NoteInVoid,
+    SlottedNoteCannotBeDeleted,
     NotFound(String),
     InvalidOperation(String),
 }
@@ -29,6 +32,7 @@ impl fmt::Display for StoreError {
             Self::Migration(e) => write!(f, "Migration error: {e}"),
             Self::NoteLocked => write!(f, "Note is locked and cannot be modified or deleted"),
             Self::NoteInVoid => write!(f, "Note is in The Void and cannot be edited"),
+            Self::SlottedNoteCannotBeDeleted => write!(f, "Slotted note cannot be moved to The Void"),
             Self::NotFound(id) => write!(f, "Entity not found: {id}"),
             Self::InvalidOperation(msg) => write!(f, "Invalid store operation: {msg}"),
         }

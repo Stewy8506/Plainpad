@@ -240,6 +240,61 @@ body.ctrl-held #bottom-bar {
   border-top-color: var(--border);
 }
 
+/* Slotted Notes Bottom Bar (Greek Gods System) */
+.slotted-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  z-index: 15;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.slotted-pill {
+  -webkit-app-region: no-drag;
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.slotted-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--text-muted);
+  opacity: 0.45;
+  transition: all var(--transition);
+  box-shadow: 0 0 0 1px transparent;
+}
+
+.slotted-pill:hover .slotted-pill-dot {
+  opacity: 0.95;
+  background-color: var(--text-primary);
+  transform: scale(1.3);
+}
+
+.slotted-pill.active .slotted-pill-dot {
+  width: 14px;
+  border-radius: 9999px;
+  opacity: 1;
+  background-color: var(--accent-coral);
+  box-shadow: 0 0 8px rgba(255, 107, 90, 0.6);
+  transform: scale(1);
+}
+
 .chrome-btn {
   -webkit-app-region: no-drag;
   background: transparent;

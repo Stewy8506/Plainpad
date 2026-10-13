@@ -54,6 +54,32 @@ fn list_notes(state: tauri::State<'_, Mutex<AppState>>) -> Vec<NoteMeta> {
 }
 
 #[tauri::command]
+fn list_slotted_notes(state: tauri::State<'_, Mutex<AppState>>) -> Vec<NoteMeta> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .list_slotted_notes()
+        .unwrap_or_default()
+        .iter()
+        .map(NoteMeta::from)
+        .collect()
+}
+
+#[tauri::command]
+fn get_slotted_note(
+    slot: i32,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Option<Note>, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .get_slotted_note(slot)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn load_note(id: String, state: tauri::State<'_, Mutex<AppState>>) -> Option<Note> {
     state.lock().unwrap().store.load_note(&id).ok().flatten()
 }
@@ -580,6 +606,7 @@ fn main() {
         plainpad_core::store::SqliteStore::open(&db_path)
             .expect("Failed to initialize SQLite store"),
     );
+    store.ensure_slotted_notes().expect("Failed to initialize slotted notes");
     let timer_path = dir.join("state/timers.json");
     let (timers, overdue) = plainpad_core::timers::TimerEngine::load(&timer_path);
 
@@ -808,6 +835,8 @@ fn main() {
             reorder_notes,
             create_pre_restore_snapshot,
             restore_from_snapshot,
+            list_slotted_notes,
+            get_slotted_note,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

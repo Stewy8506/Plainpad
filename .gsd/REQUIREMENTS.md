@@ -15,10 +15,10 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 
 | ID | Requirement | Source | Phase | Status |
 |---|---|---|---|---|
-| **REQ-01** | **Core Data Model 9 Schema**: SQLite relational schema matching the 5 Core Data entities (`notes`, `checklist_items`, `antilinks`, `attachments`, `sync_state`) and all 17 `Note` fields. | SPEC §2 | 1 | Pending |
-| **REQ-02** | **Note State & Lifecycle**: Full CRUD with soft delete into "The Void" (`deletedAt`), locking (`isLocked`), archiving (`isArchived`), and biometric/password gating flag (`isPrivate`). | SPEC §2, §9 | 1 | Pending |
-| **REQ-03** | **Checklist & Antilink Entities**: Relational support with cascade deletion for inline checklist spans and shortened URL metadata. | SPEC §2 | 1 | Pending |
-| **REQ-04** | **Pre-Restore Safety Snapshots**: Pre-restore snapshotting and sync isolation to prevent data loss during restore or recovery operations. | SPEC §9, findings §16 | 1 | Pending |
+| **REQ-01** | **Core Data Model 9 Schema**: SQLite relational schema matching the 5 Core Data entities (`notes`, `checklist_items`, `antilinks`, `attachments`, `sync_state`) and all 17 `Note` fields. | SPEC §2 | 1 | Complete |
+| **REQ-02** | **Note State & Lifecycle**: Full CRUD with soft delete into "The Void" (`deletedAt`), locking (`isLocked`), archiving (`isArchived`), and biometric/password gating flag (`isPrivate`). | SPEC §2, §9 | 1 | Complete |
+| **REQ-03** | **Checklist & Antilink Entities**: Relational support with cascade deletion for inline checklist spans and shortened URL metadata. | SPEC §2 | 1 | Complete |
+| **REQ-04** | **Pre-Restore Safety Snapshots**: Pre-restore snapshotting and sync isolation to prevent data loss during restore or recovery operations. | SPEC §9, findings §16 | 1 | Complete |
 | **REQ-05** | **9 Slotted Notes Architecture**: Permanent 9-slot carousel named after Greek deities (Hermes, Apollo/Aphrodite, Ares, Cronus, Gaia, Hades, Ouranos, Poseidon, Zeus). | SPEC §3 | 2 | Pending |
 | **REQ-06** | **Slotted Notes Bottom Bar UI**: Persistent bottom indicator bar with 9 dot/pill icons, active slot indication, and tooltips. | SPEC §3 | 2 | Pending |
 | **REQ-07** | **Slot Hotkeys & Invariance Rules**: `Ctrl+1..9` direct navigation, `Ctrl+Tab` cycling, and protection against batch-deletion or slot displacement. | SPEC §3 | 2 | Pending |

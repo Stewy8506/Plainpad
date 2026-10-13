@@ -1,17 +1,17 @@
 ---
 milestone: Antinote 1:1 Parity Reconstruction
 version: 1.0.0
-updated: 2026-10-13T19:20:30+05:30
+updated: 2026-10-13T20:14:00+05:30
 ---
 
 # Roadmap
 
-> **Current Phase:** 1 - SQLite Storage Engine & Core Data Model 9 Parity
-> **Status:** planning
+> **Current Phase:** 2 - Slotted Notes (Greek Gods System) & Quick Navigation
+> **Status:** ready for planning
 
 ## Must-Haves (from SPEC)
 
-- [ ] SQLite persistence matching Antinote Core Data Model 9 (5 entities, 17 Note properties)
+- [x] SQLite persistence matching Antinote Core Data Model 9 (5 entities, 17 Note properties)
 - [ ] 9 Slotted Notes Greek-god system (Hermes through Zeus) with bottom bar and `Ctrl+1..9` hotkeys
 - [ ] Natural-language math engine supporting fractions, decimals, scientific notation, trig modes, and 6 conversion domains
 - [ ] Natural-language sentence trigger engine (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`)
@@ -25,13 +25,13 @@ updated: 2026-10-13T19:20:30+05:30
 ## Phases
 
 ### Phase 1: SQLite Storage Engine & Core Data Model 9 Parity
-**Status:** 🔄 In Progress  
+**Status:** ✅ Complete  
 **Objective:** Replace raw file storage with embedded SQLite engine reproducing Antinote's Core Data Model 9 (`Note` with 17 attributes, `ChecklistItem`, `Antilink`, `Attachment`, `SyncState`), soft-delete into The Void, note ordering (`dbIndex`), lock, archive, and pre-restore snapshots.  
 **Requirements:** REQ-01, REQ-02, REQ-03, REQ-04  
 **Plans:**
-- [ ] Plan 1.1: Core Data Model 9 SQLite schema & migrations in `plainpad-core`
-- [ ] Plan 1.2: Note lifecycle CRUD, soft delete (The Void), locking, and archiving
-- [ ] Plan 1.3: Checklist items, antilinks, attachments relational store & pre-restore snapshot manager
+- [x] Plan 1.1: Core Data Model 9 SQLite schema & migrations in `plainpad-core`
+- [x] Plan 1.2: Note lifecycle CRUD, soft delete (The Void), locking, and archiving
+- [x] Plan 1.3: Checklist items, antilinks, attachments relational store & pre-restore snapshot manager
 
 ---
 
@@ -119,7 +119,7 @@ updated: 2026-10-13T19:20:30+05:30
 
 | Phase | Description | Status | Plans | Complete |
 |---|---|---|---|---|
-| **Phase 1** | SQLite Storage & Core Data Model 9 | 🔄 In Progress | 0/3 | 0% |
+| **Phase 1** | SQLite Storage & Core Data Model 9 | ✅ Complete | 3/3 | 100% |
 | **Phase 2** | Slotted Notes (Greek Gods) | ⬜ Not Started | 0/2 | 0% |
 | **Phase 3** | Math & 6-Domain Unit Conversions | ⬜ Not Started | 0/3 | 0% |
 | **Phase 4** | Sentence Triggers & AutoPaste | ⬜ Not Started | 0/2 | 0% |
@@ -134,7 +134,7 @@ updated: 2026-10-13T19:20:30+05:30
 
 | Phase | Started | Completed | Duration |
 |---|---|---|---|
-| Phase 1 | 2026-10-13 | — | — |
+| Phase 1 | 2026-10-13 | 2026-10-13 | ~45m |
 | Phase 2 | — | — | — |
 | Phase 3 | — | — | — |
 | Phase 4 | — | — | — |

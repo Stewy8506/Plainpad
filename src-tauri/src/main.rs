@@ -4,8 +4,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use plainpad_core::{intent, Note, NoteMeta};
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tauri::{
     image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
@@ -15,7 +15,7 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 
 struct AppState {
-    store: plainpad_core::store::FileStore,
+    store: Arc<plainpad_core::store::SqliteStore>,
     timers: plainpad_core::timers::TimerEngine,
 }
 
@@ -42,12 +42,20 @@ fn dirs_next() -> Option<PathBuf> {
 
 #[tauri::command]
 fn list_notes(state: tauri::State<'_, Mutex<AppState>>) -> Vec<NoteMeta> {
-    state.lock().unwrap().store.list_notes()
+    state
+        .lock()
+        .unwrap()
+        .store
+        .list_active_notes()
+        .unwrap_or_default()
+        .iter()
+        .map(NoteMeta::from)
+        .collect()
 }
 
 #[tauri::command]
 fn load_note(id: String, state: tauri::State<'_, Mutex<AppState>>) -> Option<Note> {
-    state.lock().unwrap().store.load_note(&id)
+    state.lock().unwrap().store.load_note(&id).ok().flatten()
 }
 
 #[tauri::command]
@@ -56,17 +64,34 @@ fn save_note(
     text: String,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<NoteMeta, String> {
-    state.lock().unwrap().store.save_note(&id, &text).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .save_note(&id, &text)
+        .map(|n| NoteMeta::from(&n))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn create_note(state: tauri::State<'_, Mutex<AppState>>) -> String {
-    state.lock().unwrap().store.create_note()
+    state
+        .lock()
+        .unwrap()
+        .store
+        .create_note("")
+        .map(|n| n.id)
+        .expect("Failed to create note")
 }
 
 #[tauri::command]
 fn delete_note(id: String, state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
-    state.lock().unwrap().store.delete_note(&id).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .soft_delete_note(&id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -74,14 +99,132 @@ fn restore_note(
     id: String,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<Option<String>, String> {
-    state.lock().unwrap().store.restore_note(&id).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .restore_from_void(&id)
+        .map(|n| Some(n.id))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn list_trash(
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Vec<plainpad_core::TrashEntry> {
-    state.lock().unwrap().store.list_trash()
+    state
+        .lock()
+        .unwrap()
+        .store
+        .list_void()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|n| {
+            let deleted_at_ms = n
+                .deleted_at
+                .as_deref()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.timestamp_millis() as u64)
+                .unwrap_or(0);
+            plainpad_core::TrashEntry {
+                id: n.id.clone(),
+                title: n.title(),
+                deleted_at_ms,
+            }
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn purge_void(state: tauri::State<'_, Mutex<AppState>>) -> Result<usize, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .purge_void()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_locked(
+    id: String,
+    locked: bool,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_locked(&id, locked)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_archived(
+    id: String,
+    archived: bool,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_archived(&id, archived)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_private(
+    id: String,
+    private: bool,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_private(&id, private)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reorder_notes(
+    ids: Vec<String>,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .reorder_notes(&ids)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_pre_restore_snapshot(
+    reason: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .create_pre_restore_snapshot(&reason)
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn restore_from_snapshot(
+    path: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .restore_from_snapshot(Path::new(&path))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -90,7 +233,12 @@ fn set_pinned(
     pinned: bool,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    state.lock().unwrap().store.set_pinned(&id, pinned).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_setting(&format!("pinned_{}", id), serde_json::Value::Bool(pinned))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -99,7 +247,12 @@ fn set_plain(
     plain: bool,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    state.lock().unwrap().store.set_plain(&id, plain).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_setting(&format!("plain_{}", id), serde_json::Value::Bool(plain))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -154,7 +307,13 @@ fn list_timers(
 
 #[tauri::command]
 fn get_settings(state: tauri::State<'_, Mutex<AppState>>) -> serde_json::Value {
-    state.lock().unwrap().store.get_settings()
+    let map = state
+        .lock()
+        .unwrap()
+        .store
+        .get_settings()
+        .unwrap_or_default();
+    serde_json::Value::Object(map)
 }
 
 #[tauri::command]
@@ -164,7 +323,12 @@ fn set_setting(
     app: AppHandle,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    state.lock().unwrap().store.set_setting(&key, value.clone()).map_err(|e| e.to_string())?;
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_setting(&key, value.clone())
+        .map_err(|e| e.to_string())?;
     let _ = app.emit("setting-changed", serde_json::json!({ "key": key, "value": value }));
     Ok(())
 }
@@ -218,15 +382,13 @@ fn open_data_dir() -> Result<String, String> {
 
 #[tauri::command]
 fn empty_trash_now(state: tauri::State<'_, Mutex<AppState>>) -> Result<(), String> {
-    let s = state.lock().unwrap();
-    let trash_list = s.store.list_trash();
-    for item in trash_list {
-        let trash_file = s.store.root().join("trash").join(format!("{}.txt", item.id));
-        let _ = std::fs::remove_file(trash_file);
-    }
-    let trash_meta = s.store.root().join("state/trash.json");
-    let _ = std::fs::write(trash_meta, "[]");
-    Ok(())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .purge_void()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -245,7 +407,14 @@ fn set_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn get_geometry(state: tauri::State<'_, Mutex<AppState>>) -> serde_json::Value {
-    state.lock().unwrap().store.get_geometry()
+    state
+        .lock()
+        .unwrap()
+        .store
+        .get_setting("geometry")
+        .ok()
+        .flatten()
+        .unwrap_or(serde_json::json!({}))
 }
 
 #[tauri::command]
@@ -253,7 +422,12 @@ fn set_geometry(
     geo: serde_json::Value,
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Result<(), String> {
-    state.lock().unwrap().store.set_geometry(geo).map_err(|e| e.to_string())
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_setting("geometry", geo)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -295,11 +469,19 @@ fn toggle_maximize(app: AppHandle) {
 #[tauri::command]
 fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>) -> Result<bool, String> {
     if let Some(w) = app.get_webview_window("main") {
-        let mut s = state.lock().unwrap();
-        let current = s.store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let s = state.lock().unwrap();
+        let current = s
+            .store
+            .get_setting("always_on_top")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let new_val = !current;
         let _ = w.set_always_on_top(new_val);
-        let _ = s.store.set_setting("always_on_top", serde_json::Value::Bool(new_val));
+        let _ = s
+            .store
+            .set_setting("always_on_top", serde_json::Value::Bool(new_val));
         Ok(new_val)
     } else {
         Err("window not found".into())
@@ -308,7 +490,15 @@ fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>
 
 #[tauri::command]
 fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
-    state.lock().unwrap().store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false)
+    state
+        .lock()
+        .unwrap()
+        .store
+        .get_setting("always_on_top")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -385,8 +575,11 @@ fn fetch_and_save_rates(rates_path: &std::path::Path) -> Result<plainpad_core::c
 
 fn main() {
     let dir = data_dir();
-    let store = plainpad_core::store::FileStore::open(&dir)
-        .expect("failed to open plainpad data directory");
+    let db_path = dir.join("plainpad.db");
+    let store = Arc::new(
+        plainpad_core::store::SqliteStore::open(&db_path)
+            .expect("Failed to initialize SQLite store"),
+    );
     let timer_path = dir.join("state/timers.json");
     let (timers, overdue) = plainpad_core::timers::TimerEngine::load(&timer_path);
 
@@ -410,13 +603,28 @@ fn main() {
             let handle = app.handle().clone();
 
             let state = app.state::<Mutex<AppState>>();
-            let geo = state.lock().unwrap().store.get_geometry();
+            let geo = state
+                .lock()
+                .unwrap()
+                .store
+                .get_setting("geometry")
+                .ok()
+                .flatten()
+                .unwrap_or(serde_json::json!({}));
             let w = geo.get("width").and_then(|v| v.as_f64()).unwrap_or(520.0);
             let h = geo.get("height").and_then(|v| v.as_f64()).unwrap_or(600.0);
             let x = geo.get("x").and_then(|v| v.as_f64());
             let y = geo.get("y").and_then(|v| v.as_f64());
 
-            let is_pinned = state.lock().unwrap().store.get_settings().get("always_on_top").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_pinned = state
+                .lock()
+                .unwrap()
+                .store
+                .get_setting("always_on_top")
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
 
             let mut builder = WebviewWindowBuilder::new(&handle, "main", tauri::WebviewUrl::App("index.html".into()))
                 .title("Plainpad")
@@ -593,6 +801,13 @@ fn main() {
             empty_trash_now,
             is_autostart_enabled,
             set_autostart,
+            purge_void,
+            set_locked,
+            set_archived,
+            set_private,
+            reorder_notes,
+            create_pre_restore_snapshot,
+            restore_from_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

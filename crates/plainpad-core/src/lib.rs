@@ -8,28 +8,16 @@ pub mod currency;
 pub mod export;
 pub mod intent;
 pub mod mathwrap;
+pub mod model;
 pub mod store;
 pub mod sync;
 pub mod timers;
 
+pub use model::{
+    now_iso, title_from_text, Antilink, Attachment, ChecklistItem, Note, NoteMeta, SyncState,
+};
+
 use serde::{Deserialize, Serialize};
-
-/// Metadata for one note. `title` is derived from the first line of the text.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct NoteMeta {
-    pub id: String,
-    pub title: String,
-    pub mtime_ms: u64,
-    pub pinned: bool,
-    pub plain: bool,
-}
-
-/// A full note: metadata plus the plain text (the single source of truth).
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Note {
-    pub meta: NoteMeta,
-    pub text: String,
-}
 
 /// One entry in the recoverable trash (30-day retention).
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -61,18 +49,6 @@ pub fn new_note_id(ms: u64) -> String {
         salt /= 36;
     }
     format!("{:x}-{}", ms, std::str::from_utf8(&suffix).unwrap_or("zzzz"))
-}
-
-/// Derive a note title from its text: first non-empty line, trimmed, max 60 chars.
-pub fn title_from_text(text: &str) -> String {
-    let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-    let t = first.trim();
-    if t.chars().count() <= 60 {
-        t.to_string()
-    } else {
-        let cut: String = t.chars().take(57).collect();
-        format!("{}…", cut.trim_end())
-    }
 }
 
 #[cfg(test)]

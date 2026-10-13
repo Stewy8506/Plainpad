@@ -8,11 +8,26 @@
 //! <root>/state/*.json        settings, index, geometry, timers, trash meta
 //! ```
 
-use crate::{new_note_id, now_ms, title_from_text, Note, NoteMeta, TrashEntry};
+use crate::{new_note_id, now_ms, title_from_text, TrashEntry};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct FileStoreMeta {
+    pub id: String,
+    pub title: String,
+    pub mtime_ms: u64,
+    pub pinned: bool,
+    pub plain: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct FileStoreNote {
+    pub meta: FileStoreMeta,
+    pub text: String,
+}
 
 const TRASH_RETENTION_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
@@ -121,8 +136,8 @@ impl FileStore {
     // ---------- notes ----------
 
     /// Every note, newest-modified first (pinned notes always lead).
-    pub fn list_notes(&self) -> Vec<NoteMeta> {
-        let mut metas: Vec<NoteMeta> = self.index.order.iter().filter_map(|id| self.load_meta(id)).collect();
+    pub fn list_notes(&self) -> Vec<FileStoreMeta> {
+        let mut metas: Vec<FileStoreMeta> = self.index.order.iter().filter_map(|id| self.load_meta(id)).collect();
         metas.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(b.mtime_ms.cmp(&a.mtime_ms)));
         metas
     }
@@ -137,7 +152,7 @@ impl FileStore {
         self.root.join(sub).join(format!("{id}.txt"))
     }
 
-    fn load_meta(&self, id: &str) -> Option<NoteMeta> {
+    fn load_meta(&self, id: &str) -> Option<FileStoreMeta> {
         let text = self.load_text(id, false)?;
         let mtime = fs::metadata(self.note_path(id, false))
             .and_then(|m| m.modified())
@@ -146,7 +161,7 @@ impl FileStore {
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
         let entry = self.index.entries.get(id).cloned().unwrap_or_default();
-        Some(NoteMeta {
+        Some(FileStoreMeta {
             id: id.to_string(),
             title: title_from_text(&text),
             mtime_ms: mtime,
@@ -160,15 +175,15 @@ impl FileStore {
     }
 
     /// Load a note (metadata + text).
-    pub fn load_note(&self, id: &str) -> Option<Note> {
+    pub fn load_note(&self, id: &str) -> Option<FileStoreNote> {
         let meta = self.load_meta(id)?;
         let text = self.load_text(id, false)?;
-        Some(Note { meta, text })
+        Some(FileStoreNote { meta, text })
     }
 
     /// Save a note: writes the file, updates the index, returns fresh metadata.
     /// Empty notes are not persisted (PRD N-3): the caller decides to discard.
-    pub fn save_note(&mut self, id: &str, text: &str) -> std::io::Result<NoteMeta> {
+    pub fn save_note(&mut self, id: &str, text: &str) -> std::io::Result<FileStoreMeta> {
         let bytes = text.as_bytes();
         let changed = match fs::read(self.note_path(id, false)) {
             Ok(old) => content_hash(&old) != content_hash(bytes),

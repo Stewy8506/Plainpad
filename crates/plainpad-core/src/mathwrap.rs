@@ -40,11 +40,12 @@ pub fn evaluate(expr: &str) -> Result<MathOutcome, String> {
 }
 
 fn evaluate_uncached(expr: &str) -> Result<MathOutcome, String> {
+    let prepared = preprocess_math_grammar(expr);
     let mut ctx = Context::new();
     ctx.disable_rng();
     ctx.set_current_time_v1(0, 0);
     ctx.set_output_mode_terminal();
-    let res = fend_core::evaluate(expr, &mut ctx)?;
+    let res = fend_core::evaluate(&prepared, &mut ctx)?;
     Ok(MathOutcome { result: res.get_main_result().to_string(), unit_aware: !res.output_is_empty() })
 }
 
@@ -329,7 +330,7 @@ pub fn parse_leading_number(t: &str) -> Vec<f64> {
 }
 
 /// Try the full evaluation stack for a note line: base conversion → percent
-/// rewrite + variable substitution → raw fend. Returns None when nothing parses.
+/// rewrite + variable substitution → grammar preprocessing → fend. Returns None when nothing parses.
 pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
     let raw = expr.trim().trim_end_matches(['=', '?']).trim();
     if raw.is_empty() {
@@ -351,6 +352,12 @@ pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
     } else {
         prepared
     };
+    let prepared = preprocess_math_grammar(&prepared);
+    if is_bitwise_expr(&prepared) {
+        if let Some(r) = eval_bitwise(&prepared) {
+            return Some(MathOutcome { result: r, unit_aware: false });
+        }
+    }
     if let Ok(m) = evaluate(&prepared) {
         let main = m.result.trim().to_string();
         if !main.is_empty() {
@@ -364,6 +371,24 @@ pub fn eval_line(expr: &str, vars: &Vars) -> Option<MathOutcome> {
     None
 }
 
+fn is_bitwise_expr(expr: &str) -> bool {
+    if expr.contains("<<") || expr.contains(">>") || expr.contains('&') || expr.contains('|') {
+        return true;
+    }
+    if let Some(pos) = expr.find('^') {
+        let lhs = expr[..pos].trim();
+        let rhs = expr[pos + 1..].trim();
+        let is_programmer_num = |s: &str| {
+            let s = s.trim().to_lowercase();
+            s.starts_with("0x") || s.starts_with("0b") || s.starts_with("0o")
+        };
+        if is_programmer_num(lhs) || is_programmer_num(rhs) {
+            return true;
+        }
+    }
+    false
+}
+
 /// C-style bitwise evaluation for integer operands: & | ^ << >>.
 fn eval_bitwise(expr: &str) -> Option<String> {
     for (pat, op) in [("<<", 0u8), (">>", 1), ("&", 2), ("|", 3), ("^", 4)] {
@@ -372,11 +397,12 @@ fn eval_bitwise(expr: &str) -> Option<String> {
             let rhs = expr[pos + pat.len()..].trim();
             let parse = |s: &str| -> Option<i128> {
                 let s = s.trim();
-                if let Some(h) = s.strip_prefix("0x") {
+                let lower = s.to_lowercase();
+                if let Some(h) = lower.strip_prefix("0x") {
                     i128::from_str_radix(h, 16).ok()
-                } else if let Some(o) = s.strip_prefix("0o") {
+                } else if let Some(o) = lower.strip_prefix("0o") {
                     i128::from_str_radix(o, 8).ok()
-                } else if let Some(b) = s.strip_prefix("0b") {
+                } else if let Some(b) = lower.strip_prefix("0b") {
                     i128::from_str_radix(b, 2).ok()
                 } else {
                     s.parse::<i128>().ok()
@@ -395,6 +421,279 @@ fn eval_bitwise(expr: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Preprocess natural-language mathematical grammar replicating Antinote DDMathParser rules:
+/// - Maps roots like `cuberoot(x)` to `cbrt(x)`
+/// - Expands implicit multiplication: `4(12+3)` -> `4 * (12+3)`, `(2+3)(4+5)` -> `(2+3) * (4+5)`, `(2+3) 4` -> `(2+3) * 4`
+/// - Rewrites mixed fractions `A B/C` into `((A) + ((B)/(C)))`
+pub fn preprocess_math_grammar(expr: &str) -> String {
+    let s = rewrite_cuberoot(expr);
+    let s = rewrite_implicit_multiplication(&s);
+    let s = rewrite_mixed_fractions(&s);
+    s
+}
+
+fn rewrite_cuberoot(expr: &str) -> String {
+    let lower = expr.to_lowercase();
+    let mut out = String::with_capacity(expr.len());
+    let mut search_from = 0;
+
+    while let Some(rel) = lower[search_from..].find("cuberoot") {
+        let start = search_from + rel;
+        let end = start + "cuberoot".len();
+
+        let boundary_before =
+            expr[..start].chars().next_back().is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        if boundary_before {
+            out.push_str(&expr[search_from..start]);
+            out.push_str("cbrt");
+            search_from = end;
+        } else {
+            out.push_str(&expr[search_from..end]);
+            search_from = end;
+        }
+    }
+    out.push_str(&expr[search_from..]);
+    out
+}
+
+fn rewrite_mixed_fractions(expr: &str) -> String {
+    let chars: Vec<char> = expr.chars().collect();
+    let len = chars.len();
+    let mut out = String::with_capacity(expr.len() + 16);
+    let mut i = 0;
+
+    while i < len {
+        let mut start_idx = i;
+        let mut has_unary_minus = false;
+
+        // Check for unary minus: either start of expr or preceded by operator / open paren
+        if chars[start_idx] == '-' {
+            let is_unary = if start_idx == 0 {
+                true
+            } else {
+                let prev_non_ws = chars[..start_idx].iter().rev().find(|c| !c.is_whitespace());
+                match prev_non_ws {
+                    None => true,
+                    Some(&c) => {
+                        c == '(' || c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == ','
+                    }
+                }
+            };
+            if is_unary {
+                let mut next = start_idx + 1;
+                while next < len && chars[next].is_whitespace() {
+                    next += 1;
+                }
+                if next < len && chars[next].is_ascii_digit() {
+                    has_unary_minus = true;
+                    start_idx = next;
+                }
+            }
+        }
+
+        // At start_idx, check if we have a standalone integer A
+        let prev_char = if start_idx == 0 {
+            None
+        } else {
+            Some(chars[start_idx - 1])
+        };
+        let valid_prefix = match prev_char {
+            None => true,
+            Some(c) => !c.is_alphanumeric() && c != '_' && c != '.' && c != '/',
+        };
+
+        if valid_prefix && start_idx < len && chars[start_idx].is_ascii_digit() {
+            let a_start = start_idx;
+            let mut a_end = a_start;
+            while a_end < len && chars[a_end].is_ascii_digit() {
+                a_end += 1;
+            }
+
+            // After A, must have at least one whitespace
+            let mut ws_end = a_end;
+            while ws_end < len && (chars[ws_end] == ' ' || chars[ws_end] == '\t') {
+                ws_end += 1;
+            }
+
+            if ws_end > a_end && ws_end < len && chars[ws_end].is_ascii_digit() {
+                let b_start = ws_end;
+                let mut b_end = b_start;
+                while b_end < len && chars[b_end].is_ascii_digit() {
+                    b_end += 1;
+                }
+
+                // After B, must have '/'
+                if b_end < len && chars[b_end] == '/' {
+                    let c_start = b_end + 1;
+                    if c_start < len && chars[c_start].is_ascii_digit() {
+                        let mut c_end = c_start;
+                        while c_end < len && chars[c_end].is_ascii_digit() {
+                            c_end += 1;
+                        }
+
+                        // After C, must NOT be digit, '.', or '/'
+                        let valid_suffix = if c_end >= len {
+                            true
+                        } else {
+                            let next_c = chars[c_end];
+                            !next_c.is_ascii_digit() && next_c != '.' && next_c != '/'
+                        };
+
+                        if valid_suffix {
+                            let a_str: String = chars[a_start..a_end].iter().collect();
+                            let b_str: String = chars[b_start..b_end].iter().collect();
+                            let c_str: String = chars[c_start..c_end].iter().collect();
+
+                            if has_unary_minus {
+                                out.push_str(&format!("-(({a_str}) + (({b_str})/({c_str})))"));
+                            } else {
+                                out.push_str(&format!("(({a_str}) + (({b_str})/({c_str})))"));
+                            }
+                            i = c_end;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        out.push(chars[i]);
+        i += 1;
+    }
+
+    out
+}
+
+fn rewrite_implicit_multiplication(expr: &str) -> String {
+    const KNOWN_FUNCS: &[&str] = &[
+        "sin", "cos", "tan", "asin", "acos", "atan",
+        "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+        "sqrt", "cbrt", "cuberoot",
+    ];
+
+    let chars: Vec<char> = expr.chars().collect();
+    let len = chars.len();
+    let mut out = String::with_capacity(len + 16);
+    let mut i = 0;
+
+    while i < len {
+        let c = chars[i];
+
+        // Case 1: `)` followed by `(` -> `) * (`
+        if c == ')' {
+            out.push(')');
+            let mut next = i + 1;
+            while next < len && (chars[next] == ' ' || chars[next] == '\t') {
+                next += 1;
+            }
+            if next < len && chars[next] == '(' {
+                out.push_str(" * ");
+                i = next;
+                continue;
+            }
+            // Case 2: `)` followed by a number -> `) * $num`
+            if next < len && chars[next].is_ascii_digit() {
+                out.push_str(" * ");
+                i = next;
+                continue;
+            }
+            // Case 3: `)` followed by function name -> `) * $func`
+            let remaining: String = chars[next..].iter().collect();
+            let mut matched_func = false;
+            for func in KNOWN_FUNCS {
+                if remaining.starts_with(func) {
+                    let after_func = next + func.len();
+                    let boundary = after_func >= len || !chars[after_func].is_alphanumeric();
+                    if boundary {
+                        out.push_str(" * ");
+                        i = next;
+                        matched_func = true;
+                        break;
+                    }
+                }
+            }
+            if matched_func {
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        // Case 4: Standalone number before `(` or function name
+        let prev_char = if i == 0 { None } else { Some(chars[i - 1]) };
+        let is_standalone_num_start = c.is_ascii_digit()
+            && prev_char.is_none_or(|p| !p.is_alphanumeric() && p != '_' && p != '.');
+
+        if is_standalone_num_start {
+            let num_start = i;
+            let mut num_end = num_start;
+            let mut seen_dot = false;
+            while num_end < len {
+                if chars[num_end].is_ascii_digit() {
+                    num_end += 1;
+                } else if chars[num_end] == '.' && !seen_dot {
+                    if num_end + 1 < len && chars[num_end + 1].is_ascii_digit() {
+                        seen_dot = true;
+                        num_end += 2;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            // Check what follows the number
+            let mut next = num_end;
+            while next < len && (chars[next] == ' ' || chars[next] == '\t') {
+                next += 1;
+            }
+
+            if next < len {
+                if chars[next] == '(' {
+                    // Number followed by `(` -> insert ` * `
+                    let num_str: String = chars[num_start..num_end].iter().collect();
+                    out.push_str(&num_str);
+                    out.push_str(" * ");
+                    i = next;
+                    continue;
+                } else {
+                    // Check if followed by known function name
+                    let remaining: String = chars[next..].iter().collect();
+                    let mut matched_func = false;
+                    for func in KNOWN_FUNCS {
+                        if remaining.starts_with(func) {
+                            let after_func = next + func.len();
+                            let boundary = after_func >= len || !chars[after_func].is_alphanumeric();
+                            if boundary {
+                                let num_str: String = chars[num_start..num_end].iter().collect();
+                                out.push_str(&num_str);
+                                out.push_str(" * ");
+                                i = next;
+                                matched_func = true;
+                                break;
+                            }
+                        }
+                    }
+                    if matched_func {
+                        continue;
+                    }
+                }
+            }
+
+            let num_str: String = chars[num_start..num_end].iter().collect();
+            out.push_str(&num_str);
+            i = num_end;
+            continue;
+        }
+
+        out.push(c);
+        i += 1;
+    }
+
+    out
 }
 
 #[cfg(test)]
@@ -418,6 +717,52 @@ mod tests {
             "temp: {}",
             m.result
         );
+    }
+
+    #[test]
+    fn math_grammar_evaluation() {
+        // Mixed fractions
+        let m = evaluate("1 1/2").unwrap();
+        assert_eq!(m.result, "1.5");
+        let m = evaluate("3 1/4 + 2").unwrap();
+        assert_eq!(m.result, "5.25");
+        let m = evaluate("2 1/3 + 1 2/3").unwrap();
+        assert_eq!(m.result, "4");
+        let m = evaluate("-1 1/2").unwrap();
+        assert_eq!(m.result, "-1.5");
+
+        // Exponents & scientific notation
+        let m = evaluate("2^8").unwrap();
+        assert_eq!(m.result, "256");
+        let m = evaluate("2**8").unwrap();
+        assert_eq!(m.result, "256");
+        let m = evaluate("1e6").unwrap();
+        assert_eq!(m.result.replace(',', ""), "1000000");
+
+        // Implicit multiplication
+        let m = evaluate("4(12+3)").unwrap();
+        assert_eq!(m.result, "60");
+        let m = evaluate("(2+3)(4+5)").unwrap();
+        assert_eq!(m.result, "45");
+        let m = evaluate("(2+3) 4").unwrap();
+        assert_eq!(m.result, "20");
+        let m = evaluate("5(2)").unwrap();
+        assert_eq!(m.result, "10");
+        let m = evaluate("3(4 + 2(1 + 1))").unwrap();
+        assert_eq!(m.result, "24");
+
+        // Roots
+        let m = evaluate("cuberoot(27)").unwrap();
+        assert_eq!(m.result, "3");
+        let m = evaluate("sqrt(144)").unwrap();
+        assert_eq!(m.result, "12");
+
+        // Bitwise vs exponent
+        let vars = Vars::new();
+        let m = eval_line("0xFF ^ 0x0F", &vars).unwrap();
+        assert_eq!(m.result, "240");
+        let m = eval_line("2^8", &vars).unwrap();
+        assert_eq!(m.result, "256");
     }
 
     #[test]

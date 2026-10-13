@@ -466,7 +466,7 @@ pub fn parse_and_convert(line: &str) -> Option<(String, String)> {
             let sep_pos = start_idx + rel;
             let lhs = s[..sep_pos].trim();
             let rhs = s[sep_pos + sep.len()..].trim();
-            start_idx = sep_pos + sep.len();
+            start_idx = sep_pos + 1;
 
             if lhs.is_empty() || rhs.is_empty() {
                 continue;

@@ -19,9 +19,9 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-02** | **Note State & Lifecycle**: Full CRUD with soft delete into "The Void" (`deletedAt`), locking (`isLocked`), archiving (`isArchived`), and biometric/password gating flag (`isPrivate`). | SPEC §2, §9 | 1 | Complete |
 | **REQ-03** | **Checklist & Antilink Entities**: Relational support with cascade deletion for inline checklist spans and shortened URL metadata. | SPEC §2 | 1 | Complete |
 | **REQ-04** | **Pre-Restore Safety Snapshots**: Pre-restore snapshotting and sync isolation to prevent data loss during restore or recovery operations. | SPEC §9, findings §16 | 1 | Complete |
-| **REQ-05** | **9 Slotted Notes Architecture**: Permanent 9-slot carousel named after Greek deities (Hermes, Apollo/Aphrodite, Ares, Cronus, Gaia, Hades, Ouranos, Poseidon, Zeus). | SPEC §3 | 2 | Pending |
-| **REQ-06** | **Slotted Notes Bottom Bar UI**: Persistent bottom indicator bar with 9 dot/pill icons, active slot indication, and tooltips. | SPEC §3 | 2 | Pending |
-| **REQ-07** | **Slot Hotkeys & Invariance Rules**: `Ctrl+1..9` direct navigation, `Ctrl+Tab` cycling, and protection against batch-deletion or slot displacement. | SPEC §3 | 2 | Pending |
+| **REQ-05** | **9 Slotted Notes Architecture**: Permanent 9-slot carousel named after Greek deities (Hermes, Apollo/Aphrodite, Ares, Cronus, Gaia, Hades, Ouranos, Poseidon, Zeus). | SPEC §3 | 2 | Complete |
+| **REQ-06** | **Slotted Notes Bottom Bar UI**: Persistent bottom indicator bar with 9 dot/pill icons, active slot indication, and tooltips. | SPEC §3 | 2 | Complete |
+| **REQ-07** | **Slot Hotkeys & Invariance Rules**: `Ctrl+1..9` direct navigation, `Ctrl+Tab` cycling, and protection against batch-deletion or slot displacement. | SPEC §3 | 2 | Complete |
 | **REQ-08** | **Math Grammar & Parsing**: Support for decimals, mixed fractions (`1 1/2`), scientific notation (`1e6`), exponents (`2^8`, `2**8`), implicit multiplication (`4(12+3)`), and algebraic precedence. | SPEC §4.1 | 3 | Pending |
 | **REQ-09** | **Trig & Angle Modes**: Configurable `degrees` vs `radians` modes and trigonometric/hyperbolic functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `sqrt`, `cuberoot`). | SPEC §4.1 | 3 | Pending |
 | **REQ-10** | **5 Physical Conversion Domains**: Comprehensive bidirectional conversions for Distance, Area (including `cuerda`, `dunam`, `bigha`), Mass (including `stones`, long ton), Volume, and Temperature. | SPEC §4.2 | 3 | Pending |

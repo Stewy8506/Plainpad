@@ -6,13 +6,13 @@ updated: 2026-10-13T20:14:00+05:30
 
 # Roadmap
 
-> **Current Phase:** 2 - Slotted Notes (Greek Gods System) & Quick Navigation
+> **Current Phase:** 3 - Natural-Language Math & 6-Domain Unit Conversion Engine
 > **Status:** ready for planning
 
 ## Must-Haves (from SPEC)
 
 - [x] SQLite persistence matching Antinote Core Data Model 9 (5 entities, 17 Note properties)
-- [ ] 9 Slotted Notes Greek-god system (Hermes through Zeus) with bottom bar and `Ctrl+1..9` hotkeys
+- [x] 9 Slotted Notes Greek-god system (Hermes through Zeus) with bottom bar and `Ctrl+1..9` hotkeys
 - [ ] Natural-language math engine supporting fractions, decimals, scientific notation, trig modes, and 6 conversion domains
 - [ ] Natural-language sentence trigger engine (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`)
 - [ ] Timer and Pomodoro subsystem with circular visual progress and native audio chimes (`backtowork`, `countdowndone`, `workdone`)
@@ -36,13 +36,13 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Implement the permanent 9-slot carousel named after Greek deities (Hermes, Apollo/Aphrodite, Ares, Cronus, Gaia, Hades, Ouranos, Poseidon, Zeus) with bottom indicator bar, active slot icons, keyboard shortcuts, and slot invariance protections.  
 **Depends on:** Phase 1  
 **Requirements:** REQ-05, REQ-06, REQ-07  
 **Plans:**
-- [ ] Plan 2.1: Slotted notes backend store logic, initialization, and slot invariance enforcement
-- [ ] Plan 2.2: `SlottedNotesBottomBar` UI component with active deity indicators and hotkeys (`Ctrl+1..9`, `Ctrl+Tab`)
+- [x] Plan 2.1: Slotted notes backend store logic, initialization, and slot invariance enforcement
+- [x] Plan 2.2: `SlottedNotesBottomBar` UI component with active deity indicators and hotkeys (`Ctrl+1..9`, `Ctrl+Tab`)
 
 ---
 
@@ -120,7 +120,7 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase | Description | Status | Plans | Complete |
 |---|---|---|---|---|
 | **Phase 1** | SQLite Storage & Core Data Model 9 | ✅ Complete | 3/3 | 100% |
-| **Phase 2** | Slotted Notes (Greek Gods) | ⬜ Not Started | 0/2 | 0% |
+| **Phase 2** | Slotted Notes (Greek Gods) | ✅ Complete | 2/2 | 100% |
 | **Phase 3** | Math & 6-Domain Unit Conversions | ⬜ Not Started | 0/3 | 0% |
 | **Phase 4** | Sentence Triggers & AutoPaste | ⬜ Not Started | 0/2 | 0% |
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ⬜ Not Started | 0/2 | 0% |
@@ -135,7 +135,7 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase | Started | Completed | Duration |
 |---|---|---|---|
 | Phase 1 | 2026-10-13 | 2026-10-13 | ~45m |
-| Phase 2 | — | — | — |
+| Phase 2 | 2026-10-13 | 2026-10-13 | ~30m |
 | Phase 3 | — | — | — |
 | Phase 4 | — | — | — |
 | Phase 5 | — | — | — |

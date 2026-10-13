@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-13T20:15:00+05:30
+updated: 2026-10-13T20:56:00+05:30
 ---
 
 # Project State
@@ -7,26 +7,25 @@ updated: 2026-10-13T20:15:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 2 - Slotted Notes (Greek Gods System) & Quick Navigation  
+**Phase:** 3 - Natural-Language Math & 6-Domain Unit Conversion Engine  
 **Status:** ready for planning  
-**Roadmap:** `.gsd/ROADMAP.md` (Phase 1 complete: 3/3 plans; Phase 2 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-04 Complete)  
-**Phase 1 Verification:** `.gsd/phases/1/VERIFICATION.md` (Status: PASS, 14/14 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1 & 2 complete: 5/5 plans; Phase 3 next)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-07 Complete: 7/30)  
+**Phase 2 Verification:** `.gsd/phases/2/VERIFICATION.md` (Status: PASS, 9/9 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and verification of **Phase 1: SQLite Storage Engine & Core Data Model 9 Parity**:
-  - `01-PLAN.md`: Implemented Core Data Model 9 entity models and SQLite migrations 1 through 9.
-  - `02-PLAN.md`: Implemented Note CRUD (all 17 attributes), stack ordering (`db_index`), lock protection, archiving, and The Void soft-delete lifecycle.
-  - `03-PLAN.md`: Implemented relational child entities, Pre-Restore Safety Snapshot manager with sync isolation, and wired `SqliteStore` into Tauri IPC.
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 14 empirical verification points with 55 unit/integration tests green.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` with Phase 1 completion.
+- Completed full execution and verification of **Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation**:
+  - `01-PLAN.md`: Implemented 9-slot Greek deity persistent carousel (`Hermes` to `Zeus`), idempotence, slot invariance rules (immunity from deletion / The Void), and Tauri IPC queries.
+  - `02-PLAN.md`: Implemented `SlottedNotesBottomBar` with 9 dot/pill indicators, deity tooltips, active slot styling, direct jump shortcuts (`Ctrl+1..9` / `Cmd+1..9`), and cycle navigation (`Ctrl+Tab` / `Ctrl+Shift+Tab`).
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 9 empirical verification points with 4 new slotted notes integration tests and clean TypeScript compilation.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-05 through REQ-07 Complete.
 
 ## Next Steps
 
-1. Plan Phase 2: Slotted Notes (Greek Gods System) & Quick Navigation using `/plan 2` (or delegating to `gsd-planner`).
-2. Execute Phase 2 plans (backend slot invariance + frontend `SlottedNotesBottomBar` UI & hotkeys `Ctrl+1..9`, `Ctrl+Tab`).
-3. Verify Phase 2 deliverables against REQ-05 through REQ-07.
+1. Plan Phase 3: Natural-Language Math & 6-Domain Unit Conversion Engine (`/plan 3`).
+2. Execute Phase 3 plans (math tokenizer with fractions/exponents/angle modes, 5 physical unit domains, 160+ currency sync engine).
+3. Verify Phase 3 deliverables against REQ-08 through REQ-11.
 
 ## Active Decisions
 
@@ -34,6 +33,7 @@ updated: 2026-10-13T20:15:00+05:30
 |---|---|---|---|
 | Target reference | Antinote v2.1.0 (`/Applications/Antinote.app`) | 2026-10-13 | All phases |
 | Storage engine | Embedded SQLite (`rusqlite` bundled) matching Core Data Model 9 | 2026-10-13 | Phase 1, Phase 2, Phase 8 |
+| Slotted note keys | Hermes(0) to Zeus(8), `Ctrl+1..9` jump, `Ctrl+Tab` cycle | 2026-10-13 | Phase 2, UI |
 | Planning methodology | GSD (SPEC → PLAN → EXECUTE → VERIFY → COMMIT) | 2026-10-13 | Entire project lifecycle |
 
 ## Blockers

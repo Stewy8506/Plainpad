@@ -126,6 +126,11 @@ let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let analyzeTimeout: ReturnType<typeof setTimeout> | null = null;
 let statusTimeout: ReturnType<typeof setTimeout> | null = null;
 let activeTimers: Timer[] = [];
+let isAutoPasteActive = false;
+let autoPastePollTimer: number | null = null;
+let triggerConfig: Record<string, unknown> | null = null;
+const AUTOPASTE_PROPOSED_MSG = "Enter to start AutoPaste. Everything you copy will be added here. Esc stops autopaste.";
+const AUTOPASTE_ACTIVE_MSG = "AutoPaste active. Everything you copy will be added here. Esc stops autopaste.";
 
 // ---------- DOM refs ----------
 
@@ -148,6 +153,9 @@ const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement
 const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
 const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
 const syncStatus = document.getElementById('sync-status') as HTMLSpanElement | null;
+const autopasteIndicator = document.getElementById('autopaste-indicator') as HTMLDivElement | null;
+const autopasteStatusText = document.getElementById('autopaste-status-text') as HTMLSpanElement | null;
+const autopasteBtnStop = document.getElementById('autopaste-btn-stop') as HTMLButtonElement | null;
 
 function showStatusMessage(msg: string, durationMs = 2500): void {
   if (!syncStatus) return;
@@ -267,6 +275,41 @@ buy milk, eggs, bread`;
     });
   } catch (err) {
     console.warn('Failed to listen for rates-updated:', err);
+  }
+
+  // Load trigger configuration (REQ-12, REQ-14)
+  try {
+    triggerConfig = await invoke<Record<string, unknown>>('get_trigger_config');
+  } catch (err) {
+    console.warn('Failed to get trigger config:', err);
+  }
+
+  // AutoPaste stop button handler
+  if (autopasteBtnStop) {
+    autopasteBtnStop.addEventListener('click', () => {
+      stopAutoPaste().catch(console.error);
+    });
+  }
+
+  // Listen for incoming AutoPaste clipboard events
+  try {
+    await listen('autopaste-clip', (payload: unknown) => {
+      const p = payload as { text?: string };
+      const text = p?.text;
+      if (typeof text === 'string' && text.length > 0) {
+        if (editor.value.length > 0 && !editor.value.endsWith('\n')) {
+          editor.value += '\n';
+        }
+        editor.value += text;
+        editor.selectionStart = editor.selectionEnd = editor.value.length;
+        editor.scrollTop = editor.scrollHeight;
+        updateBackdrop();
+        scheduleSave();
+        scheduleAnalyze();
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to listen for autopaste-clip:', err);
   }
 }
 
@@ -497,10 +540,29 @@ async function runAnalysis(): Promise<void> {
       triggerExit(child);
     }
     activeAnnoCache.clear();
+    if (!isAutoPasteActive && autopasteIndicator) {
+      autopasteIndicator.classList.add('autopaste-hidden');
+    }
     return;
   }
 
   renderOverlay(analysis, text);
+
+  // AutoPaste indicator proposed banner handling
+  const hasPasteChip = analysis.annotations?.some((a) => a.kind === 'paste');
+  if (hasPasteChip) {
+    if (!isAutoPasteActive && autopasteIndicator) {
+      autopasteIndicator.classList.remove('autopaste-hidden');
+      autopasteIndicator.classList.remove('active');
+      if (autopasteStatusText) {
+        autopasteStatusText.textContent = AUTOPASTE_PROPOSED_MSG;
+      }
+    }
+  } else {
+    if (!isAutoPasteActive && autopasteIndicator) {
+      autopasteIndicator.classList.add('autopaste-hidden');
+    }
+  }
 
   // Code mode: toggle body class
   document.body.classList.toggle('code-mode', analysis.code_mode);
@@ -868,9 +930,75 @@ function toggleCheckbox(lineIndex: number): void {
 
 // ---------- Accept chip (Tab on suggestion) ----------
 
-function triggerAutoPaste(): void {
-  window.dispatchEvent(new CustomEvent('autopaste-trigger'));
-  console.log('[AutoPaste] Trigger activated');
+async function startAutoPaste(): Promise<void> {
+  if (isAutoPasteActive) return;
+  isAutoPasteActive = true;
+  if (autopasteIndicator) {
+    autopasteIndicator.classList.remove('autopaste-hidden');
+    autopasteIndicator.classList.add('active');
+  }
+  if (autopasteStatusText) {
+    autopasteStatusText.textContent = AUTOPASTE_ACTIVE_MSG;
+  }
+
+  // Clear trigger keyword line if cursor is on it
+  const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
+  const lines = editor.value.split('\n');
+  if (cursorLine >= 0 && cursorLine < lines.length) {
+    const curLineTrimmed = lines[cursorLine].trim().toLowerCase();
+    const pasteAliases = (triggerConfig?.paste_triggers as string[])?.map((t: string) => t.toLowerCase()) || ['paste'];
+    if (pasteAliases.includes(curLineTrimmed)) {
+      lines.splice(cursorLine, 1);
+      editor.value = lines.join('\n');
+      updateBackdrop();
+      scheduleSave();
+      scheduleAnalyze();
+    }
+  }
+
+  try {
+    await invoke('start_autopaste');
+  } catch (err) {
+    console.warn('[AutoPaste] Backend start_autopaste error:', err);
+  }
+
+  // Fallback poller in webview via navigator.clipboard
+  if (autoPastePollTimer !== null) {
+    clearInterval(autoPastePollTimer);
+  }
+  autoPastePollTimer = window.setInterval(async () => {
+    if (!isAutoPasteActive) return;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim().length > 0) {
+          await invoke('submit_clipboard_clip', { text });
+        }
+      }
+    } catch {
+      // Ignore clipboard read permission or empty errors
+    }
+  }, 400);
+}
+
+async function stopAutoPaste(): Promise<void> {
+  isAutoPasteActive = false;
+  if (autoPastePollTimer !== null) {
+    clearInterval(autoPastePollTimer);
+    autoPastePollTimer = null;
+  }
+  if (autopasteIndicator) {
+    autopasteIndicator.classList.remove('active');
+    autopasteIndicator.classList.add('autopaste-hidden');
+  }
+  if (autopasteStatusText) {
+    autopasteStatusText.textContent = AUTOPASTE_PROPOSED_MSG;
+  }
+  try {
+    await invoke('stop_autopaste');
+  } catch (err) {
+    console.warn('[AutoPaste] Backend stop_autopaste error:', err);
+  }
 }
 
 function acceptChip(lineIndex: number, text: string): void {
@@ -895,14 +1023,7 @@ function acceptChip(lineIndex: number, text: string): void {
 
   // 2. Paste / AutoPaste trigger
   if (kind === 'paste' || lower === 'paste') {
-    triggerAutoPaste();
-    if (lower === 'paste') {
-      lines.splice(lineIndex, 1);
-      editor.value = lines.join('\n');
-      updateBackdrop();
-      scheduleSave();
-      scheduleAnalyze();
-    }
+    startAutoPaste().catch(console.error);
     return;
   }
 
@@ -1236,9 +1357,13 @@ editor.addEventListener('scroll', () => {
 });
 
 editor.addEventListener('keydown', (e: KeyboardEvent) => {
-  // Esc → hide window
+  // Esc → stop autopaste first if active, otherwise hide window
   if (e.key === 'Escape') {
     e.preventDefault();
+    if (isAutoPasteActive) {
+      stopAutoPaste().catch(console.error);
+      return;
+    }
     invoke('hide_window');
     return;
   }
@@ -1260,9 +1385,16 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     }
   }
 
-  // Tab → accept chip or indent
+  // Tab → accept chip, trigger paste, or indent
   if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
+    const curLine = editor.value.split('\n')[cursorLine]?.trim().toLowerCase() || '';
+    const pasteAliases = (triggerConfig?.paste_triggers as string[])?.map((t: string) => t.toLowerCase()) || ['paste'];
+    if (pasteAliases.includes(curLine)) {
+      e.preventDefault();
+      startAutoPaste().catch(console.error);
+      return;
+    }
     const chipEl = overlay.querySelector(`.anno-chip`) as HTMLElement | null;
     if (chipEl) {
       e.preventDefault();
@@ -1306,10 +1438,16 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
-  // Enter on a timer line → start or stop timer
+  // Enter on a timer line or paste trigger line → start or stop timer / start AutoPaste
   if (e.key === 'Enter') {
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
     const line = editor.value.split('\n')[cursorLine]?.trim().toLowerCase() || '';
+    const pasteAliases = (triggerConfig?.paste_triggers as string[])?.map((t: string) => t.toLowerCase()) || ['paste'];
+    if (pasteAliases.includes(line)) {
+      e.preventDefault();
+      startAutoPaste().catch(console.error);
+      return;
+    }
     if (line === 'timer s' || line === 'timer stop' || line === 'timer cancel' || line === 'stop timer') {
       e.preventDefault();
       stopActiveTimer();
@@ -1359,6 +1497,12 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
 
 // Global hotkeys (direct slot jumps Ctrl+1..9, cycle navigation Ctrl+Tab)
 window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && isAutoPasteActive) {
+    e.preventDefault();
+    stopAutoPaste().catch(console.error);
+    return;
+  }
+
   const isCtrlOrMeta = e.ctrlKey || e.metaKey;
 
   // Direct slot jump: Ctrl+1 through Ctrl+9

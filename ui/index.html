@@ -41,6 +41,13 @@
   <!-- Timer display (shown when timers are active) -->
   <div id="timer-display" class="hidden"></div>
 
+  <!-- AutoPaste indicator banner (REQ-14) -->
+  <div id="autopaste-indicator" class="autopaste-indicator autopaste-hidden">
+    <span class="indicator-pulse"></span>
+    <span id="autopaste-status-text" class="indicator-status-text">Enter to start AutoPaste. Everything you copy will be added here. Esc stops autopaste.</span>
+    <button id="autopaste-btn-stop" type="button" class="autopaste-btn-stop">Stop (Esc)</button>
+  </div>
+
   <!-- Bottom chrome bar: actions (hover-revealed) -->
   <div id="bottom-bar" class="chrome-bar">
     <button id="btn-new" class="chrome-btn" title="New note (Ctrl+N)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg></button>

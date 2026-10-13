@@ -4,6 +4,7 @@
 //! Storage is plain files: one `.txt` per note, JSON sidecars for state.
 //! There is no database anywhere in this crate.
 
+pub mod clipboard;
 pub mod currency;
 pub mod export;
 pub mod intent;
@@ -15,6 +16,7 @@ pub mod timers;
 pub mod trigger_config;
 pub mod units;
 
+pub use clipboard::{AutoPasteEngine, ClipboardReader, MockClipboardReader, SystemClipboardReader};
 pub use model::{
     now_iso, title_from_text, Antilink, Attachment, ChecklistItem, Note, NoteMeta, SyncState,
 };

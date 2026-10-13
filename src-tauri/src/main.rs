@@ -17,6 +17,7 @@ use tauri_plugin_autostart::ManagerExt;
 struct AppState {
     store: Arc<plainpad_core::store::SqliteStore>,
     timers: plainpad_core::timers::TimerEngine,
+    autopaste: Arc<plainpad_core::clipboard::AutoPasteEngine>,
 }
 
 type AppStateLock = Mutex<AppState>;
@@ -721,6 +722,62 @@ fn convert_currency_ipc(amount: f64, from: String, to: String) -> Result<String,
 }
 
 #[tauri::command]
+fn start_autopaste(
+    app: AppHandle,
+    state: tauri::State<'_, AppStateLock>,
+) -> Result<(), String> {
+    let autopaste = {
+        let s = state.lock().unwrap();
+        s.autopaste.start();
+        s.autopaste.clone()
+    };
+
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        let mut reader = plainpad_core::clipboard::SystemClipboardReader::new_lenient();
+        while autopaste.is_active() {
+            if let Ok(Some(text)) = reader.read_text() {
+                if let Some(new_clip) = autopaste.process_clip(&text) {
+                    let _ = app_handle.emit("autopaste-clip", serde_json::json!({ "text": new_clip }));
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_autopaste(state: tauri::State<'_, AppStateLock>) -> Result<(), String> {
+    state.lock().unwrap().autopaste.stop();
+    Ok(())
+}
+
+#[tauri::command]
+fn get_autopaste_status(state: tauri::State<'_, AppStateLock>) -> bool {
+    state.lock().unwrap().autopaste.is_active()
+}
+
+#[tauri::command]
+fn submit_clipboard_clip(
+    text: String,
+    app: AppHandle,
+    state: tauri::State<'_, AppStateLock>,
+) -> Result<Option<String>, String> {
+    let autopaste = state.lock().unwrap().autopaste.clone();
+    if !autopaste.is_active() {
+        return Ok(None);
+    }
+    if let Some(new_clip) = autopaste.process_clip(&text) {
+        let _ = app.emit("autopaste-clip", serde_json::json!({ "text": new_clip }));
+        Ok(Some(new_clip))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 fn refresh_rates_now(app: AppHandle) -> Result<plainpad_core::currency::RatesInfo, String> {
     let dir = data_dir();
     let rates_path = dir.join("state/exchange_rates.json");
@@ -813,7 +870,11 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .manage(Mutex::new(AppState { store, timers }))
+        .manage(Mutex::new(AppState {
+            store,
+            timers,
+            autopaste: Arc::new(plainpad_core::clipboard::AutoPasteEngine::new()),
+        }))
         .setup(move |app| {
             let handle = app.handle().clone();
 
@@ -1041,6 +1102,10 @@ fn main() {
             get_slotted_note,
             get_trigger_config,
             set_trigger_config,
+            start_autopaste,
+            stop_autopaste,
+            get_autopaste_status,
+            submit_clipboard_clip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

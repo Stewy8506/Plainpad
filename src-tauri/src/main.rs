@@ -347,21 +347,123 @@ fn export_file_name(text: String, kind: String) -> String {
     plainpad_core::export::export_file_name(&text, k)
 }
 
+fn pause_timer_if_configured(app: &AppHandle) {
+    let state = app.state::<Mutex<AppState>>();
+    let s = state.lock().unwrap();
+    let should_pause = s
+        .store
+        .get_setting("pauseTheTimerIfAppClosed")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    if should_pause {
+        if let Some(paused) = s.timers.pause_active() {
+            let _ = app.emit("timer-tick", paused);
+        }
+    }
+}
+
 #[tauri::command]
 fn start_timer(
     name: String,
     duration_ms: Option<u64>,
     #[allow(non_snake_case)]
     durationMs: Option<u64>,
+    timer_type: Option<String>,
+    break_ms: Option<u64>,
+    #[allow(non_snake_case)]
+    breakMs: Option<u64>,
     state: tauri::State<'_, Mutex<AppState>>,
-) -> u64 {
+) -> plainpad_core::timers::Timer {
     let d = duration_ms.or(durationMs).unwrap_or(300_000);
-    state.lock().unwrap().timers.start(&name, d)
+    let s = state.lock().unwrap();
+    match timer_type.as_deref() {
+        Some("stopwatch") => s.timers.start_stopwatch(&name),
+        Some("pomodoro") => {
+            let b = break_ms.or(breakMs).unwrap_or(5 * 60_000);
+            s.timers.start_pomodoro(&name, d, b)
+        }
+        _ => s.timers.start_countdown(&name, d),
+    }
 }
 
 #[tauri::command]
-fn cancel_timer(id: u64, state: tauri::State<'_, Mutex<AppState>>) -> bool {
-    state.lock().unwrap().timers.cancel(id)
+fn start_timer_phrase(
+    phrase: String,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<plainpad_core::timers::Timer, String> {
+    let timer = state
+        .lock()
+        .unwrap()
+        .timers
+        .start_with_phrase(&phrase)
+        .ok_or_else(|| "Failed to parse or start timer phrase".to_string())?;
+    let _ = app.emit("timer-tick", &timer);
+    Ok(timer)
+}
+
+#[tauri::command]
+fn cancel_timer(
+    id: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> bool {
+    let stopped = state.lock().unwrap().timers.stop(id);
+    let _ = app.emit("timer-stopped", serde_json::json!({ "id": id }));
+    stopped
+}
+
+#[tauri::command]
+fn pause_timer(
+    id: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Option<plainpad_core::timers::Timer> {
+    let timer = state.lock().unwrap().timers.pause_resume(id)?;
+    let _ = app.emit("timer-tick", &timer);
+    Some(timer)
+}
+
+#[tauri::command]
+fn pause_resume_timer(
+    id: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Option<plainpad_core::timers::Timer> {
+    let timer = state.lock().unwrap().timers.pause_resume(id)?;
+    let _ = app.emit("timer-tick", &timer);
+    Some(timer)
+}
+
+#[tauri::command]
+fn resume_timer(
+    _id: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Option<plainpad_core::timers::Timer> {
+    let timer = state.lock().unwrap().timers.resume_active()?;
+    let _ = app.emit("timer-tick", &timer);
+    Some(timer)
+}
+
+#[tauri::command]
+fn restart_timer(
+    id: Option<u64>,
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Option<plainpad_core::timers::Timer> {
+    let timer = state.lock().unwrap().timers.restart(id)?;
+    let _ = app.emit("timer-tick", &timer);
+    Some(timer)
+}
+
+#[tauri::command]
+fn get_active_timer(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Option<plainpad_core::timers::Timer> {
+    state.lock().unwrap().timers.get_active()
 }
 
 #[tauri::command]
@@ -560,6 +662,7 @@ fn minimize_window(app: AppHandle) {
 
 #[tauri::command]
 fn hide_window(app: AppHandle) {
+    pause_timer_if_configured(&app);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.hide();
     }
@@ -861,6 +964,8 @@ fn main() {
                 if window.label() == "settings" {
                     api.prevent_close();
                     let _ = window.hide();
+                } else if window.label() == "main" {
+                    pause_timer_if_configured(window.app_handle());
                 }
             }
         })
@@ -947,6 +1052,7 @@ fn main() {
                         }
                         "hide" => {
                             if let Some(w) = tray_handle.get_webview_window("main") {
+                                pause_timer_if_configured(&tray_handle);
                                 w.hide().ok();
                             }
                         }
@@ -965,6 +1071,7 @@ fn main() {
             app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
                 if let Some(w) = hotkey_handle.get_webview_window("main") {
                     if w.is_visible().unwrap_or(false) {
+                        pause_timer_if_configured(&hotkey_handle);
                         w.hide().ok();
                     } else {
                         w.show().ok();
@@ -985,10 +1092,22 @@ fn main() {
                 let s = app.state::<Mutex<AppState>>();
                 let timers = &s.lock().unwrap().timers;
                 let fire_handle = handle.clone();
-                timers.spawn_watcher(move |fired| {
-                    let _ = fire_handle.emit("timer-fired", serde_json::json!({
-                        "id": fired.id, "name": fired.name, "overdue": fired.overdue
-                    }));
+                timers.spawn_watcher(move |event| {
+                    match event {
+                        plainpad_core::timers::TimerEvent::Tick(timer) => {
+                            let _ = fire_handle.emit("timer-tick", timer);
+                        }
+                        plainpad_core::timers::TimerEvent::Fired { id, name, sound, overdue } => {
+                            let _ = fire_handle.emit("timer-fired", serde_json::json!({
+                                "id": id, "name": name, "sound": sound, "overdue": overdue
+                            }));
+                        }
+                        plainpad_core::timers::TimerEvent::PhaseTransition { id, is_work_phase, cycle_count, sound } => {
+                            let _ = fire_handle.emit("timer-phase-transition", serde_json::json!({
+                                "id": id, "is_work_phase": is_work_phase, "cycle_count": cycle_count, "sound": sound
+                            }));
+                        }
+                    }
                 });
             }
 
@@ -1063,6 +1182,12 @@ fn main() {
             export_note,
             export_file_name,
             start_timer,
+            start_timer_phrase,
+            pause_timer,
+            pause_resume_timer,
+            resume_timer,
+            restart_timer,
+            get_active_timer,
             cancel_timer,
             list_timers,
             get_settings,

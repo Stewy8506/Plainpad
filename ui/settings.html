@@ -609,10 +609,32 @@
         <div class="setting-row">
           <div class="setting-meta">
             <span class="setting-label">Audio alert chime</span>
-            <span class="setting-desc">Play a subtle audio notification tone when time is up</span>
+            <span class="setting-desc">Play a subtle audio notification tone when time is up or Pomodoro phases change</span>
           </div>
           <label class="switch">
             <input type="checkbox" id="setting-timer-sound" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Show full-screen alert on Pomodoro completion</span>
+            <span class="setting-desc">Display a prominent full-screen alert modal when Pomodoro work or break cycle completes</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-timer-pomo-fullscreen" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Pause active timer when app closes or minimizes</span>
+            <span class="setting-desc">Automatically pause running countdowns and Pomodoros when Plainpad window closes or hides</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-timer-pause-on-close" checked />
             <span class="slider"></span>
           </label>
         </div>

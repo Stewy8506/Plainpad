@@ -244,49 +244,76 @@ pub fn analyze_with_config(text: &str, plain: bool, config: &TriggerConfig) -> A
                         continue;
                     }
                     TriggerCategory::Timer => {
-                        if crate::timers::is_timer_stop_phrase(t) {
-                            annotations.push(Annotation {
-                                line: i,
-                                kind: "timer_stop",
-                                confidence: 0.95,
-                                value: String::new(),
-                                chip: "Stop timer (Enter)".into(),
-                                why: "phrase to stop running timer".into(),
-                            });
-                            continue;
-                        }
-                        if !remaining_args.is_empty() {
-                            let phrase = format!("timer {}", remaining_args);
-                            if let Some((name, ms)) = crate::timers::parse_timer_phrase(&phrase) {
-                                annotations.push(Annotation {
-                                    line: i,
-                                    kind: "timer",
-                                    confidence: 0.95,
-                                    value: format_duration(ms),
-                                    chip: format!("Start timer ({}) (Enter)", if name == "Timer" { format_duration(ms) } else { name }),
-                                    why: "starts with 'timer' followed by duration".into(),
-                                });
-                                continue;
-                            } else {
-                                annotations.push(Annotation {
-                                    line: i,
-                                    kind: "timer",
-                                    confidence: 0.95,
-                                    value: remaining_args.to_string(),
-                                    chip: format!("Start timer ({}) (Enter)", remaining_args),
-                                    why: "timer trigger keyword".into(),
-                                });
-                                continue;
-                            }
+                        let phrase = if _kw.to_lowercase() == "timer" {
+                            t.to_string()
+                        } else if remaining_args.is_empty() {
+                            "timer".to_string()
                         } else {
-                            annotations.push(Annotation {
-                                line: i,
-                                kind: "timer",
-                                confidence: 0.95,
-                                value: "00:00".into(),
-                                chip: "Start stopwatch (Enter)".into(),
-                                why: "starts a stopwatch".into(),
-                            });
+                            format!("timer {}", remaining_args)
+                        };
+                        if let Some(tp) = crate::timers::parse_timer_phrase(&phrase) {
+                            match tp {
+                                crate::timers::TimerPhrase::StartStopwatch => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer",
+                                        confidence: 0.95,
+                                        value: "00:00".into(),
+                                        chip: "Start stopwatch (Enter)".into(),
+                                        why: "starts a stopwatch".into(),
+                                    });
+                                }
+                                crate::timers::TimerPhrase::StartCountdown { duration_ms, name } => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer",
+                                        confidence: 0.95,
+                                        value: format_duration(duration_ms),
+                                        chip: format!("Start timer ({}) (Enter)", if name == "Timer" { format_duration(duration_ms) } else { name }),
+                                        why: "countdown timer trigger".into(),
+                                    });
+                                }
+                                crate::timers::TimerPhrase::StartPomodoro { work_ms, break_ms, .. } => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer",
+                                        confidence: 0.95,
+                                        value: format!("Pomodoro ({}m/{}m)", work_ms / 60_000, break_ms / 60_000),
+                                        chip: "Start Pomodoro (Enter)".into(),
+                                        why: "pomodoro trigger".into(),
+                                    });
+                                }
+                                crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::PauseResume) => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer_control",
+                                        confidence: 0.95,
+                                        value: "pause".into(),
+                                        chip: "Pause / Resume timer (Enter)".into(),
+                                        why: "phrase to pause or resume active timer".into(),
+                                    });
+                                }
+                                crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::Restart) => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer_control",
+                                        confidence: 0.95,
+                                        value: "restart".into(),
+                                        chip: "Restart timer (Enter)".into(),
+                                        why: "phrase to restart active timer".into(),
+                                    });
+                                }
+                                crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::Stop) => {
+                                    annotations.push(Annotation {
+                                        line: i,
+                                        kind: "timer_stop",
+                                        confidence: 0.95,
+                                        value: "stop".into(),
+                                        chip: "Stop timer (Enter)".into(),
+                                        why: "phrase to stop running timer".into(),
+                                    });
+                                }
+                            }
                             continue;
                         }
                     }
@@ -296,26 +323,75 @@ pub fn analyze_with_config(text: &str, plain: bool, config: &TriggerConfig) -> A
 
         // Timers (explicit phrases only — starting one by accident would be rude).
         if !config.disable_all_keywords {
-            if crate::timers::is_timer_stop_phrase(t) {
-                annotations.push(Annotation {
-                    line: i,
-                    kind: "timer_stop",
-                    confidence: 0.95,
-                    value: String::new(),
-                    chip: "Stop timer (Enter)".into(),
-                    why: "phrase to stop running timer".into(),
-                });
-                continue;
-            }
-
-            if let Some((name, ms)) = crate::timers::parse_timer_phrase(t) {
-                annotations.push(Annotation {
-                    line: i, kind: "timer", confidence: 0.95,
-                    value: format_duration(ms),
-                    chip: format!("Start timer ({})", if name == "Timer" { format_duration(ms) } else { name.clone() }),
-                    why: "starts with 'timer' or 'remind me in' followed by a duration".into(),
-                });
-                continue;
+            if let Some(tp) = crate::timers::parse_timer_phrase(t) {
+                match tp {
+                    crate::timers::TimerPhrase::StartStopwatch => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer",
+                            confidence: 0.95,
+                            value: "00:00".into(),
+                            chip: "Start stopwatch (Enter)".into(),
+                            why: "starts a stopwatch".into(),
+                        });
+                        continue;
+                    }
+                    crate::timers::TimerPhrase::StartCountdown { duration_ms, name } => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer",
+                            confidence: 0.95,
+                            value: format_duration(duration_ms),
+                            chip: format!("Start timer ({}) (Enter)", if name == "Timer" { format_duration(duration_ms) } else { name }),
+                            why: "starts with 'timer' or 'remind me in' followed by a duration".into(),
+                        });
+                        continue;
+                    }
+                    crate::timers::TimerPhrase::StartPomodoro { work_ms, break_ms, .. } => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer",
+                            confidence: 0.95,
+                            value: format!("Pomodoro ({}m/{}m)", work_ms / 60_000, break_ms / 60_000),
+                            chip: "Start Pomodoro (Enter)".into(),
+                            why: "pomodoro trigger".into(),
+                        });
+                        continue;
+                    }
+                    crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::PauseResume) => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer_control",
+                            confidence: 0.95,
+                            value: "pause".into(),
+                            chip: "Pause / Resume timer (Enter)".into(),
+                            why: "phrase to pause or resume active timer".into(),
+                        });
+                        continue;
+                    }
+                    crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::Restart) => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer_control",
+                            confidence: 0.95,
+                            value: "restart".into(),
+                            chip: "Restart timer (Enter)".into(),
+                            why: "phrase to restart active timer".into(),
+                        });
+                        continue;
+                    }
+                    crate::timers::TimerPhrase::Control(crate::timers::TimerControlAction::Stop) => {
+                        annotations.push(Annotation {
+                            line: i,
+                            kind: "timer_stop",
+                            confidence: 0.95,
+                            value: "stop".into(),
+                            chip: "Stop timer (Enter)".into(),
+                            why: "phrase to stop running timer".into(),
+                        });
+                        continue;
+                    }
+                }
             }
         }
 

@@ -70,13 +70,14 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 5: Timer, Stopwatch & Pomodoro Subsystem
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Comprehensive inline timer and alarm subsystem handling stopwatch, count-down, and classic/custom Pomodoro cycles, interactive circular progress UI, and native audio alerts (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`).  
 **Depends on:** Phase 1  
 **Requirements:** REQ-15, REQ-16, REQ-17  
 **Plans:**
-- [ ] Plan 5.1: Timer backend tick thread, state persistence, and parsing (`timer`, `timer 5`, `pomo`, `p`, `r`, `s`)
-- [ ] Plan 5.2: Timer UI pill with animated circular SVG/Canvas progress and native sound alert playback
+- [x] Plan 5.1: Timer backend tick thread, state persistence, and parsing (`timer`, `timer 5`, `pomo`, `p`, `r`, `s`)
+- [x] Plan 5.2: Timer UI pill with animated circular SVG/Canvas progress and native sound alert playback
+- [x] Plan 5.3: Gap Closure: Timer reactivity on pause/stop and window hide/close pause integration
 
 ---
 
@@ -123,7 +124,7 @@ updated: 2026-10-13T20:14:00+05:30
 | **Phase 2** | Slotted Notes (Greek Gods) | ✅ Complete | 2/2 | 100% |
 | **Phase 3** | Math & 6-Domain Unit Conversions | ✅ Complete | 3/3 | 100% |
 | **Phase 4** | Sentence Triggers & AutoPaste | ✅ Complete | 2/2 | 100% |
-| **Phase 5** | Timer, Stopwatch & Pomodoro | ⬜ Not Started | 0/2 | 0% |
+| **Phase 5** | Timer, Stopwatch & Pomodoro | ✅ Complete | 3/3 | 100% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ⬜ Not Started | 0/3 | 0% |
 | **Phase 7** | JS Extension Runtime & AI Catalog | ⬜ Not Started | 0/2 | 0% |
 | **Phase 8** | Window Chrome, Shaders & Export Suite | ⬜ Not Started | 0/3 | 0% |
@@ -138,7 +139,7 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase 2 | 2026-10-13 | 2026-10-13 | ~30m |
 | Phase 3 | 2026-10-13 | 2026-10-13 | ~45m |
 | Phase 4 | 2026-10-13 | 2026-10-15 | ~40m |
-| Phase 5 | — | — | — |
+| Phase 5 | 2026-10-15 | 2026-10-15 | ~45m |
 | Phase 6 | — | — | — |
 | Phase 7 | — | — | — |
 | Phase 8 | — | — | — |

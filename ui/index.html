@@ -59,7 +59,18 @@
     <button id="btn-settings" class="chrome-btn" title="Settings"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M13.5 8a5.5 5.5 0 00-.1-.9l1.4-1.1-1.3-2.3-1.7.6a5.5 5.5 0 00-1.5-.9L10 1.7H7.4l-.3 1.7a5.5 5.5 0 00-1.5.9l-1.7-.6-1.3 2.3 1.4 1.1A5.5 5.5 0 003.9 8a5.5 5.5 0 00.1.9l-1.4 1.1 1.3 2.3 1.7-.6a5.5 5.5 0 001.5.9l.3 1.7h2.6l.3-1.7a5.5 5.5 0 001.5-.9l1.7.6 1.3-2.3-1.4-1.1c.1-.3.1-.6.1-.9z"/></svg></button>
   </div>
 
-
+  <!-- Timer Full-Screen Alert Overlay (TimerCompleteAlertView) -->
+  <div id="timer-fullscreen-alert" class="timer-fullscreen-alert hidden" role="dialog" aria-modal="true">
+    <div class="timer-alert-card">
+      <div class="timer-alert-icon" id="timer-alert-icon">⏱</div>
+      <h2 class="timer-alert-headline" id="timer-alert-headline">Work Complete!</h2>
+      <p class="timer-alert-summary" id="timer-alert-summary">Completed Work Cycle 1</p>
+      <div class="timer-alert-actions">
+        <button id="timer-alert-action-btn" class="timer-alert-btn-primary" type="button">Start Break</button>
+        <button id="timer-alert-dismiss-btn" class="timer-alert-btn-dismiss" type="button">Dismiss</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="main.js"></script>
 </body>

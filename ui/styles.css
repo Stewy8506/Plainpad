@@ -802,55 +802,295 @@ body.ctrl-held #bottom-bar {
   color: var(--anno-prefix);
 }
 
-/* ---------- Timer Display ---------- */
+/* ---------- Timer Display & TimerView Pill ---------- */
 #timer-display {
   position: fixed;
-  bottom: calc(var(--chrome-height) + 8px);
+  bottom: calc(var(--chrome-height) + 12px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-btn);
-  padding: 6px 14px;
-  font-size: 13px;
-  color: var(--text-primary);
-  box-shadow: var(--shadow-chip);
   z-index: 200;
   display: flex;
   align-items: center;
-  gap: 8px;
-  cursor: pointer;
   transition: all var(--transition);
 }
 
-#timer-display:hover {
+#timer-display.hidden {
+  display: none !important;
+}
+
+.timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 5px 14px 5px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+
+.timer-pill:hover {
   border-color: var(--border-hover);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
-#timer-display .timer-label {
-  color: var(--text-secondary);
-  font-size: 12px;
+.timer-pill.timer-celebrate {
+  animation: timerCelebratePulse 0.8s ease-in-out infinite;
 }
 
-#timer-display .timer-value {
+@keyframes timerCelebratePulse {
+  0% { transform: scale(1); box-shadow: 0 4px 16px rgba(255, 107, 94, 0.2); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255, 107, 94, 0.5); }
+  100% { transform: scale(1); box-shadow: 0 4px 16px rgba(255, 107, 94, 0.2); }
+}
+
+/* Circular SVG Progress Ring */
+.timer-progress-ring {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.timer-progress-ring svg {
+  width: 28px;
+  height: 28px;
+  transform: rotate(-90deg);
+}
+
+.timer-progress-ring .ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 2.5;
+}
+
+.timer-progress-ring .ring-progress {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke: var(--accent-coral);
+  stroke-dasharray: 80.11;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.25s linear, stroke 0.2s ease;
+}
+
+/* Ring colors based on phase */
+.timer-pill.work-phase .ring-progress {
+  stroke: var(--accent-coral);
+}
+
+.timer-pill.break-phase .ring-progress {
+  stroke: var(--accent-teal);
+}
+
+.timer-pill.is-paused .ring-progress {
+  stroke: var(--accent-yellow);
+  stroke-dasharray: 4 3 !important;
+}
+
+.timer-pill.stopwatch-phase .ring-progress {
+  stroke: var(--accent-coral);
+  animation: timerSpinRing 4s linear infinite;
+}
+
+@keyframes timerSpinRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Meta Container */
+.timer-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.timer-phase-badge {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.timer-pill.work-phase .timer-phase-badge {
+  color: var(--accent-coral-dim);
+}
+
+.timer-pill.break-phase .timer-phase-badge {
+  color: var(--accent-teal-dim);
+}
+
+.timer-pill.is-paused .timer-phase-badge {
+  color: var(--accent-yellow);
+}
+
+.timer-digits {
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-family: inherit;
 }
 
-.timer-btn-stop {
+/* Hover Action Controls */
+.timer-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.18s ease, max-width 0.22s ease, margin 0.18s ease;
+}
+
+.timer-pill:hover .timer-controls {
+  opacity: 1;
+  max-width: 90px;
+  margin-left: 6px;
+}
+
+.timer-btn {
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--transition);
 }
+
+.timer-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.timer-btn-pause:hover {
+  color: var(--accent-yellow);
+}
+
+.timer-btn-restart:hover {
+  color: var(--accent-blue);
+}
+
 .timer-btn-stop:hover {
   color: var(--accent-coral);
+}
+
+/* Full-Screen Alert Overlay (TimerCompleteAlertView) */
+.timer-fullscreen-alert {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 21, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.timer-fullscreen-alert.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.timer-alert-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-hover);
+  border-radius: 16px;
+  padding: 36px 40px;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  max-width: 360px;
+  width: 90%;
+  animation: timerCardFadeIn 0.25s ease-out;
+}
+
+@keyframes timerCardFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.timer-alert-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.timer-alert-headline {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.timer-alert-summary {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.timer-alert-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.timer-alert-btn-primary {
+  background: var(--accent-coral);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-btn);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.timer-alert-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.timer-alert-btn-dismiss {
   background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.timer-alert-btn-dismiss:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .anno-timer-chip.running {

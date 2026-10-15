@@ -103,6 +103,8 @@ const selCalcPrecision = document.getElementById('setting-calc-precision') as HT
 const selDefaultTimerDuration = document.getElementById('setting-default-timer-duration') as HTMLSelectElement;
 const chkTimerNotification = document.getElementById('setting-timer-notification') as HTMLInputElement;
 const chkTimerSound = document.getElementById('setting-timer-sound') as HTMLInputElement;
+const chkTimerPomoFullscreen = document.getElementById('setting-timer-pomo-fullscreen') as HTMLInputElement;
+const chkTimerPauseOnClose = document.getElementById('setting-timer-pause-on-close') as HTMLInputElement;
 const chkTimerAutohide = document.getElementById('setting-timer-autohide') as HTMLInputElement;
 
 // Currency & Rates
@@ -252,8 +254,24 @@ async function loadSettings(): Promise<void> {
   if (chkTimerNotification && settings.timer_notification !== undefined) {
     chkTimerNotification.checked = !!settings.timer_notification;
   }
-  if (chkTimerSound && settings.timer_sound !== undefined) {
-    chkTimerSound.checked = !!settings.timer_sound;
+  if (chkTimerSound) {
+    if (settings.timerCountdownPlaySound !== undefined) {
+      chkTimerSound.checked = !!settings.timerCountdownPlaySound;
+    } else if (settings.timer_sound !== undefined) {
+      chkTimerSound.checked = !!settings.timer_sound;
+    } else {
+      chkTimerSound.checked = true;
+    }
+  }
+  if (chkTimerPomoFullscreen) {
+    chkTimerPomoFullscreen.checked = settings.timerPomoShowFullScreenAlert !== undefined
+      ? !!settings.timerPomoShowFullScreenAlert
+      : false;
+  }
+  if (chkTimerPauseOnClose) {
+    chkTimerPauseOnClose.checked = settings.pauseTheTimerIfAppClosed !== undefined
+      ? !!settings.pauseTheTimerIfAppClosed
+      : true;
   }
   if (chkTimerAutohide && settings.timer_autohide !== undefined) {
     chkTimerAutohide.checked = !!settings.timer_autohide;
@@ -442,7 +460,12 @@ function wireEvents(): void {
   // Timer
   selDefaultTimerDuration?.addEventListener('change', () => saveSetting('default_timer_duration', parseInt(selDefaultTimerDuration.value, 10)));
   chkTimerNotification?.addEventListener('change', () => saveSetting('timer_notification', chkTimerNotification.checked));
-  chkTimerSound?.addEventListener('change', () => saveSetting('timer_sound', chkTimerSound.checked));
+  chkTimerSound?.addEventListener('change', () => {
+    saveSetting('timerCountdownPlaySound', chkTimerSound.checked);
+    saveSetting('timer_sound', chkTimerSound.checked);
+  });
+  chkTimerPomoFullscreen?.addEventListener('change', () => saveSetting('timerPomoShowFullScreenAlert', chkTimerPomoFullscreen.checked));
+  chkTimerPauseOnClose?.addEventListener('change', () => saveSetting('pauseTheTimerIfAppClosed', chkTimerPauseOnClose.checked));
   chkTimerAutohide?.addEventListener('change', () => saveSetting('timer_autohide', chkTimerAutohide.checked));
 
   // Currency & Rates

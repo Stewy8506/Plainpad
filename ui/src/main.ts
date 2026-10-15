@@ -1,6 +1,7 @@
 // Plainpad — UI entry point
 // No framework: textarea + mirror + overlay editor with IPC to Tauri core.
 import { SlottedNotesBottomBar, DEITY_SLOTS } from './slotted.js';
+import { initTimerUI, clearTimer } from './timer.js';
 
 interface TauriAPI {
   core: {
@@ -97,14 +98,6 @@ interface Analysis {
   elapsed_us: number;
 }
 
-interface Timer {
-  id: number;
-  name: string;
-  due_ms: number;
-  duration_ms: number;
-  fired: boolean;
-}
-
 
 // ---------- State ----------
 
@@ -125,7 +118,6 @@ let tabWidth = '2';
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let analyzeTimeout: ReturnType<typeof setTimeout> | null = null;
 let statusTimeout: ReturnType<typeof setTimeout> | null = null;
-let activeTimers: Timer[] = [];
 let isAutoPasteActive = false;
 let autoPastePollTimer: number | null = null;
 let triggerConfig: Record<string, unknown> | null = null;
@@ -151,7 +143,6 @@ const btnAlwaysOnTop = document.getElementById('btn-always-on-top') as HTMLButto
 const btnMinimize = document.getElementById('btn-minimize') as HTMLButtonElement;
 const btnMaximize = document.getElementById('btn-maximize') as HTMLButtonElement;
 const btnClose = document.getElementById('btn-close') as HTMLButtonElement;
-const timerDisplay = document.getElementById('timer-display') as HTMLDivElement;
 const syncStatus = document.getElementById('sync-status') as HTMLSpanElement | null;
 const autopasteIndicator = document.getElementById('autopaste-indicator') as HTMLDivElement | null;
 const autopasteStatusText = document.getElementById('autopaste-status-text') as HTMLSpanElement | null;
@@ -256,17 +247,8 @@ buy milk, eggs, bread`;
   const isPinned = await invoke<boolean>('get_always_on_top');
   if (btnAlwaysOnTop) btnAlwaysOnTop.classList.toggle('active', !!isPinned);
 
-  // Active timers
-  activeTimers = (await invoke<Timer[]>('list_timers')) || [];
-  updateTimerDisplay();
-
-  // Listen for timer events
-  await listen('timer-fired', (payload: unknown) => {
-    const p = payload as { id: number; name: string; overdue: boolean };
-    showTimerNotification(p.name, p.overdue);
-    activeTimers = activeTimers.filter((t) => t.id !== p.id);
-    updateTimerDisplay();
-  });
+  // Interactive Timer Pill UI
+  await initTimerUI();
 
   // Listen for live rate updates
   try {
@@ -827,22 +809,38 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
       el.style.left = `${left}px`;
-      const isRunning = activeTimers.some((t) => !t.fired);
       const clockSvg = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align: -1px; margin-right: 5px;"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v3.5l2 2"/></svg>`;
-      if (isRunning) {
-        el.innerHTML = `${clockSvg}Running (Click to stop)`;
-        el.classList.add('running');
-        el.title = 'Click to stop timer';
-        el.addEventListener('click', () => stopActiveTimer());
-      } else {
-        const iconSpan = document.createElement('span');
-        iconSpan.innerHTML = clockSvg;
-        el.appendChild(iconSpan);
-        const timerText = `Start ${anno.value} (Enter)`;
-        el.appendChild(document.createTextNode(timerText));
-        el.title = 'Click or press Enter to start timer';
-        el.addEventListener('click', () => startTimerFromLine(anno.line));
-      }
+      const iconSpan = document.createElement('span');
+      iconSpan.innerHTML = clockSvg;
+      el.appendChild(iconSpan);
+      const labelText = anno.chip || `Start ${anno.value} (Enter)`;
+      el.appendChild(document.createTextNode(labelText));
+      el.title = `Click or press Enter: ${labelText}`;
+      el.addEventListener('click', () => {
+        invoke('start_timer_phrase', { phrase: lineText }).catch(console.error);
+      });
+    } else if (anno.kind === 'timer_control') {
+      el = document.createElement('div');
+      el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+      const isPause = anno.value === 'pause';
+      const iconSvg = isPause
+        ? `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><path d="M4 3.5h3v9H4zm5 0h3v9H9z"/></svg>`
+        : `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align: -1px; margin-right: 5px;"><path d="M2.5 8a5.5 5.5 0 1 1 1.6 3.9"/><path d="M2.5 12V8h4"/></svg>`;
+      const iconSpan = document.createElement('span');
+      iconSpan.innerHTML = iconSvg;
+      el.appendChild(iconSpan);
+      const labelText = anno.chip || (isPause ? 'Pause / Resume (Enter)' : 'Restart timer (Enter)');
+      el.appendChild(document.createTextNode(labelText));
+      el.title = `Click or press Enter: ${labelText}`;
+      el.addEventListener('click', () => {
+        if (isPause) {
+          invoke('pause_timer').catch(console.error);
+        } else {
+          invoke('restart_timer').catch(console.error);
+        }
+      });
     } else if (anno.kind === 'timer_stop') {
       el = document.createElement('div');
       el.className = `anno anno-timer-chip stop${isNew ? ' kinetic-reveal-chip' : ''}`;
@@ -852,9 +850,13 @@ function renderOverlay(analysis: Analysis, text: string): void {
       const iconSpan = document.createElement('span');
       iconSpan.innerHTML = stopSvg;
       el.appendChild(iconSpan);
-      el.appendChild(document.createTextNode('Stop timer (Enter)'));
-      el.title = 'Click or press Enter to stop active timer';
-      el.addEventListener('click', () => stopActiveTimer());
+      const labelText = anno.chip || 'Stop timer (Enter)';
+      el.appendChild(document.createTextNode(labelText));
+      el.title = `Click or press Enter: ${labelText}`;
+      el.addEventListener('click', () => {
+        clearTimer();
+        invoke('cancel_timer').catch(console.error);
+      });
     } else if (anno.kind === 'checklist' && (lineText.startsWith('[ ] ') || lineText.startsWith('[x] ') || lineText.startsWith('[X] '))) {
       const isChecked = lineText.startsWith('[x] ') || lineText.startsWith('[X] ');
       el = document.createElement('div');
@@ -1011,13 +1013,24 @@ function acceptChip(lineIndex: number, text: string): void {
   const anno = lastAnalysis?.annotations?.find((a) => a.line === lineIndex);
   const kind = anno?.kind || '';
 
-  // 1. Timer line
+  // 1. Timer triggers
   if (kind === 'timer' || lower.startsWith('timer') || lower.startsWith('remind')) {
-    startTimerFromLine(lineIndex);
+    invoke('start_timer_phrase', { phrase: trimmed }).catch(console.error);
     return;
   }
-  if (kind === 'timer_stop' || lower === 'stop timer') {
-    stopActiveTimer();
+  if (kind === 'timer_control') {
+    if (anno?.value === 'pause' || lower.includes('pause') || lower.includes('resume')) {
+      invoke('pause_timer').catch(console.error);
+    } else if (anno?.value === 'restart' || lower.includes('restart')) {
+      invoke('restart_timer').catch(console.error);
+    } else {
+      invoke('start_timer_phrase', { phrase: trimmed }).catch(console.error);
+    }
+    return;
+  }
+  if (kind === 'timer_stop' || lower === 'stop timer' || lower === 'timer s' || lower === 'timer stop' || lower === 'timer cancel') {
+    clearTimer();
+    invoke('cancel_timer').catch(console.error);
     return;
   }
 
@@ -1137,115 +1150,6 @@ function acceptChip(lineIndex: number, text: string): void {
   updateBackdrop();
   scheduleSave();
   scheduleAnalyze();
-}
-
-// ---------- Timer actions ----------
-
-async function startTimerFromLine(lineIndex: number): Promise<void> {
-  const lines = editor.value.split('\n');
-  if (lineIndex >= lines.length) return;
-  const line = lines[lineIndex].trim();
-
-  // Parse duration from the analysis or raw text
-  const analysis = await invoke<Analysis>('analyze_note', { text: line, plain: false });
-  const timerAnno = analysis?.annotations?.find((a) => a.kind === 'timer');
-
-  const durationMs = timerAnno ? parseDurationFromValue(timerAnno.value) : (parseDurationFromValue(line) || 300_000);
-  if (durationMs > 0) {
-    let name = 'Timer';
-    if (timerAnno?.chip) {
-      name = timerAnno.chip
-        .replace(/^Start timer \(/i, '')
-        .replace(/^⏱ Start /i, '')
-        .replace(/\)\s*\(Enter\)$/i, '')
-        .replace(/\(Enter\)$/i, '')
-        .replace(/\)$/i, '')
-        .trim() || 'Timer';
-    }
-    const id = await invoke<number>('start_timer', { name, durationMs, duration_ms: durationMs });
-    activeTimers.push({
-      id: id || Date.now(),
-      name,
-      due_ms: Date.now() + durationMs,
-      duration_ms: durationMs,
-      fired: false,
-    });
-    updateTimerDisplay();
-  }
-}
-
-function parseDurationFromValue(value: string): number {
-  let ms = 0;
-  const parts = value.match(/(\d+)\s*(h|hr|hour|hours|min|mins|minute|minutes|m|s|sec|secs|second|seconds)/gi);
-  if (parts) {
-    for (const part of parts) {
-      const m = part.match(/(\d+)\s*(h|hr|hour|hours|min|mins|minute|minutes|m|s|sec|secs|second|seconds)/i);
-      if (!m) continue;
-      const n = parseInt(m[1], 10);
-      const unit = m[2].toLowerCase();
-      if (unit.startsWith('h')) ms += n * 3600000;
-      else if (unit.startsWith('m') && !unit.startsWith('ms')) ms += n * 60000;
-      else if (unit.startsWith('s')) ms += n * 1000;
-    }
-  }
-  if (ms === 0) {
-    const rawNum = parseInt(value.replace(/\D/g, ''), 10);
-    if (!isNaN(rawNum) && rawNum > 0) {
-      ms = rawNum * 60000; // default bare numbers to minutes (e.g. "5" -> 5 minutes)
-    }
-  }
-  return ms;
-}
-
-async function stopActiveTimer(id?: number): Promise<void> {
-  const timerToCancel = id !== undefined
-    ? activeTimers.find((t) => t.id === id)
-    : activeTimers.find((t) => !t.fired);
-  if (!timerToCancel) return;
-
-  await invoke('cancel_timer', { id: timerToCancel.id });
-  activeTimers = activeTimers.filter((t) => t.id !== timerToCancel.id);
-  updateTimerDisplay();
-  scheduleAnalyze();
-}
-
-timerDisplay?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  stopActiveTimer();
-});
-
-function updateTimerDisplay(): void {
-  const running = activeTimers.filter((t) => !t.fired);
-  if (running.length === 0) {
-    timerDisplay.classList.add('hidden');
-    return;
-  }
-  timerDisplay.classList.remove('hidden');
-
-  const nearest = running.reduce((a, b) => (a.due_ms < b.due_ms ? a : b));
-  const remaining = Math.max(0, nearest.due_ms - Date.now());
-  const minutes = Math.floor(remaining / 60000);
-  const seconds = Math.floor((remaining % 60000) / 1000);
-
-  timerDisplay.innerHTML = `
-    <span class="timer-label">${nearest.name}</span>
-    <span class="timer-value">${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}</span>
-    <button class="timer-btn-stop" title="Stop timer"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
-  `;
-
-  const btnStop = timerDisplay.querySelector('.timer-btn-stop');
-  btnStop?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    stopActiveTimer(nearest.id);
-  });
-}
-
-function showTimerNotification(name: string, overdue: boolean): void {
-  const msg = overdue ? `${name} (missed while away)` : `${name} — time's up!`;
-  // Show in-app notification (flash the timer display)
-  timerDisplay.classList.remove('hidden');
-  timerDisplay.innerHTML = `<span class="timer-value" style="color: var(--anno-math)">${msg}</span>`;
-  setTimeout(() => updateTimerDisplay(), 5000);
 }
 
 // ---------- Export ----------
@@ -1441,7 +1345,8 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
   // Enter on a timer line or paste trigger line → start or stop timer / start AutoPaste
   if (e.key === 'Enter') {
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
-    const line = editor.value.split('\n')[cursorLine]?.trim().toLowerCase() || '';
+    const rawLine = editor.value.split('\n')[cursorLine]?.trim() || '';
+    const line = rawLine.toLowerCase();
     const pasteAliases = (triggerConfig?.paste_triggers as string[])?.map((t: string) => t.toLowerCase()) || ['paste'];
     if (pasteAliases.includes(line)) {
       e.preventDefault();
@@ -1450,11 +1355,24 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     }
     if (line === 'timer s' || line === 'timer stop' || line === 'timer cancel' || line === 'stop timer') {
       e.preventDefault();
-      stopActiveTimer();
+      clearTimer();
+      invoke('cancel_timer').catch(console.error);
+      return;
+    }
+    if (line === 'timer p' || line === 'timer pause' || line === 'timer resume') {
+      e.preventDefault();
+      invoke('pause_timer').catch(console.error);
+      return;
+    }
+    if (line === 'timer r' || line === 'timer restart') {
+      e.preventDefault();
+      invoke('restart_timer').catch(console.error);
       return;
     }
     if (line.startsWith('timer') || line.startsWith('remind')) {
-      startTimerFromLine(cursorLine);
+      e.preventDefault();
+      invoke('start_timer_phrase', { phrase: rawLine }).catch(console.error);
+      return;
     }
   }
 
@@ -1632,9 +1550,6 @@ function saveGeometry(): void {
   }, 500);
 }
 window.addEventListener('resize', saveGeometry);
-
-// Timer display update loop
-setInterval(updateTimerDisplay, 1000);
 
 // ---------- Boot ----------
 init().catch(console.error);

@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-15T11:02:00+05:30
+updated: 2026-10-15T12:15:00+05:30
 ---
 
 # Project State
@@ -8,25 +8,32 @@ updated: 2026-10-15T11:02:00+05:30
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
 **Phase:** 5 - Timer, Stopwatch & Pomodoro Subsystem  
-**Status:** ready for planning  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1, 2, 3, 4 complete: 10/10 plans; Phase 5 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-14 Complete: 14/30)  
-**Phase 4 Verification:** `.gsd/phases/4/VERIFICATION.md` (Status: PASS, 13/13 must-haves verified)  
+**Status:** complete & verified  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1, 2, 3, 4, 5 complete: 13/13 plans; Phase 6 next)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-17 Complete: 17/30)  
+**Phase 5 Verification:** `.gsd/phases/5/VERIFICATION.md` (Status: PASS, 16/16 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and verification of **Phase 4: Natural-Language Sentence Triggers & AutoPaste**:
-  - `01-PLAN.md`: Implemented sentence-level trigger evaluator for all 9 categories (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`), trigger alias mappings, paragraph isolation, and master toggle `disableAllKeywords`.
-  - `02-PLAN.md`: Implemented continuous AutoPaste clipboard ingestion engine with background watcher, duplicate suppression, and `Esc` deactivation.
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 13 empirical verification points across 109 passing unit & integration tests.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-12 through REQ-14 Complete.
+- Completed full execution and verification of **Phase 5: Timer, Stopwatch & Pomodoro Subsystem**:
+  - `01-PLAN.md`: Implemented timer phrase parser (`timer` stopwatch counting up from 00:00, `timer 5` countdown, `timer 3:30`, `timer pomo` 25m/5m, `timer 57 11`, `timer p`, `timer r`, `timer s`), `TimerEngine` tick loop, Pomodoro state transitions (work -> break -> work with cycle count), persistence across window close/restart (`state/timers.json`), and Tauri IPC endpoints.
+  - `02-PLAN.md`: Implemented interactive Timer Pill UI (`TimerView`) with circular SVG progress ring (`circleDiameter = 28px`), tabular time digits, phase badge, hover controls (pause/resume, restart, stop), audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`), and full-screen modal alert.
+  - `03-PLAN.md` (Gap Closure): Wired immediate real-time event broadcasting on pause/resume/stop, instant UI clearance on `timer s` in editor or stop chip click, and integrated `pauseTheTimerIfAppClosed` with window hide/close/tray lifecycle events.
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 16 empirical verification checks with 125 passing tests in `plainpad-core`.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-15 through REQ-17 Complete.
 
 ## Next Steps
 
-1. Plan Phase 5: Timer, Stopwatch & Pomodoro Subsystem (`/plan 5`).
-2. Execute Phase 5 plans (timer syntax parsing, background tick thread, circular progress UI pill, native audio alerts).
-3. Verify Phase 5 deliverables against REQ-15 through REQ-17.
-4. Per user instruction, commit all changes at the end of Phase 5.
+1. Commit Phase 5 batch changes to git (`feat(phase-5): implement timer, stopwatch, and pomodoro subsystem`).
+2. Plan Phase 6: Rich Editor Capabilities & Modal Vim Mode (`/plan 6`).
+   - Interactive checkboxes (`- [ ]`, `- [x]`)
+   - List continuation (`- `, `1. `) on Enter
+   - Compact Antilink pills
+   - Rounded syntax-highlighted code blocks with Copy button
+   - Full Modal Vim Mode engine (`Normal`, `Insert`, `Visual`, `Visual Line`)
+3. Execute Phase 6 plans.
+4. Verify Phase 6 deliverables (REQ-18 through REQ-22).
+5. Batch commit Phase 6.
 
 ## Active Decisions
 
@@ -36,6 +43,7 @@ updated: 2026-10-15T11:02:00+05:30
 | Storage engine | Embedded SQLite (`rusqlite` bundled) matching Core Data Model 9 | 2026-10-13 | Phase 1, Phase 2, Phase 8 |
 | Slotted note keys | Hermes(0) to Zeus(8), `Ctrl+1..9` jump, `Ctrl+Tab` cycle | 2026-10-13 | Phase 2, UI |
 | Math & Conversion Engine | Fend + custom preprocessor & affine 5-domain unit system | 2026-10-13 | Phase 3, Phase 4 |
+| Timer & Pomodoro Engine | Delta-based background tick, JSON persistence, circular SVG pill UI | 2026-10-15 | Phase 5, UI, Shell |
 | Commit cadence | Commit once per completed phase (per user rule) | 2026-10-13 | Execution workflow |
 | Planning methodology | GSD (SPEC → PLAN → EXECUTE → VERIFY → COMMIT) | 2026-10-13 | Entire project lifecycle |
 

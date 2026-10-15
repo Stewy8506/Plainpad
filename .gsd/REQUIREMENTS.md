@@ -29,9 +29,9 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-12** | **Natural-Language Sentence Triggers**: Evaluation of `sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, and `timer` keywords at paragraph and list scope. | SPEC §5 | 4 | Complete |
 | **REQ-13** | **Trigger Configuration**: Master toggle `disableAllKeywords`, `allowArgumentsAfterKeyword`, and custom trigger alias mappings. | SPEC §5 | 4 | Complete |
 | **REQ-14** | **AutoPaste & Clipboard Ingestion**: Clipboard monitoring mode appending copied text continuously until dismissed with `Esc`. | SPEC §5, findings §6 | 4 | Complete |
-| **REQ-15** | **Timer & Pomodoro Parsing**: Parse `timer` (stopwatch), `timer 5` (countdown), `timer 3:30`, `timer pomo` (25m/5m), `timer 57 11`, and controls (`timer p`, `timer r`, `timer s`). | SPEC §6.1 | 5 | Pending |
-| **REQ-16** | **Timer UI & Circular Visuals**: Animated circular progress pill (`circleDiameter`, `circleSpacing`), remaining time display, and work/break phase indicators. | SPEC §6.2 | 5 | Pending |
-| **REQ-17** | **Audio Alerts & Modal Overlays**: Shipped audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`) and optional full-screen Pomodoro alert overlay. | SPEC §6.2 | 5 | Pending |
+| **REQ-15** | **Timer & Pomodoro Parsing**: Parse `timer` (stopwatch), `timer 5` (countdown), `timer 3:30`, `timer pomo` (25m/5m), `timer 57 11`, and controls (`timer p`, `timer r`, `timer s`). | SPEC §6.1 | 5 | Complete |
+| **REQ-16** | **Timer UI & Circular Visuals**: Animated circular progress pill (`circleDiameter`, `circleSpacing`), remaining time display, and work/break phase indicators. | SPEC §6.2 | 5 | Complete |
+| **REQ-17** | **Audio Alerts & Modal Overlays**: Shipped audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`) and optional full-screen Pomodoro alert overlay. | SPEC §6.2 | 5 | Complete |
 | **REQ-18** | **Interactive Inline Checkboxes**: Render `- [ ]` and `- [x]` as clickable checkboxes with bidirectional plaintext synchronization. | SPEC §7 | 6 | Pending |
 | **REQ-19** | **List Continuation & Formatting**: Auto-completion for bullet lists (`- `, `* `) and numbered lists (`1. `) on Enter, terminating on blank Enter. | SPEC §7 | 6 | Pending |
 | **REQ-20** | **Smart Antilinks**: URL auto-detection with compact domain pill display while maintaining underlying destination URL and opt-out skip list. | SPEC §7 | 6 | Pending |
@@ -63,11 +63,11 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 
 | Requirement | Phase | Target Module | Status |
 |---|---|---|---|
-| REQ-01 .. REQ-04 | Phase 1 | `crates/plainpad-core/src/store.rs`, `src-tauri` | Planned |
-| REQ-05 .. REQ-07 | Phase 2 | `ui/src/slotted.ts`, `crates/plainpad-core/src/store.rs` | Planned |
-| REQ-08 .. REQ-11 | Phase 3 | `crates/plainpad-core/src/mathwrap.rs`, `currency.rs` | Planned |
-| REQ-12 .. REQ-14 | Phase 4 | `crates/plainpad-core/src/intent.rs`, `ui/src/editor.ts` | Planned |
-| REQ-15 .. REQ-17 | Phase 5 | `crates/plainpad-core/src/timers.rs`, `ui/src/timer.ts` | Planned |
+| REQ-01 .. REQ-04 | Phase 1 | `crates/plainpad-core/src/store.rs`, `src-tauri` | Complete |
+| REQ-05 .. REQ-07 | Phase 2 | `ui/src/slotted.ts`, `crates/plainpad-core/src/store.rs` | Complete |
+| REQ-08 .. REQ-11 | Phase 3 | `crates/plainpad-core/src/mathwrap.rs`, `currency.rs` | Complete |
+| REQ-12 .. REQ-14 | Phase 4 | `crates/plainpad-core/src/intent.rs`, `ui/src/editor.ts` | Complete |
+| REQ-15 .. REQ-17 | Phase 5 | `crates/plainpad-core/src/timers.rs`, `ui/src/timer.ts` | Complete |
 | REQ-18 .. REQ-22 | Phase 6 | `ui/src/editor.ts`, `ui/src/vim.ts` | Planned |
 | REQ-23 .. REQ-25 | Phase 7 | `crates/plainpad-core/src/extensions.rs`, `ui/src/extensions.ts` | Planned |
 | REQ-26 .. REQ-30 | Phase 8 | `ui/src/shaders.ts`, `export.rs`, `src-tauri/src/main.rs` | Planned |

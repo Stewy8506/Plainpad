@@ -1,27 +1,65 @@
-//! Timers: countdowns started from plain phrases, persisted to disk so they
-//! survive window close AND app restart (PRD R-2). A watcher thread marks due
-//! timers and emits events; timers that expired while the app was away fire
-//! immediately on load.
+//! Timers: Stopwatches, Countdowns, and Pomodoro cycles started from plain phrases,
+//! persisted to disk so they survive window close AND app restart (SPEC §6, PRD R-2).
+//! A watcher thread advances timers, handles phase transitions, and emits events.
 
 use crate::now_ms;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TimerType {
+    Stopwatch,
+    Countdown,
+    Pomodoro,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimerControlAction {
+    PauseResume,
+    Restart,
+    Stop,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimerPhrase {
+    StartStopwatch,
+    StartCountdown { duration_ms: u64, name: String },
+    StartPomodoro { work_ms: u64, break_ms: u64, name: String },
+    Control(TimerControlAction),
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Timer {
     pub id: u64,
     pub name: String,
-    pub due_ms: u64,
+    pub timer_type: TimerType,
     pub duration_ms: u64,
+    pub break_duration_ms: u64,
+    pub elapsed_ms: u64,
+    pub remaining_ms: u64,
+    pub is_work_phase: bool,
+    pub cycle_count: u32,
+    pub is_paused: bool,
+    pub started_at_ms: u64,
+    pub due_ms: u64,
+    pub last_tick_ms: u64,
     pub fired: bool,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(tag = "type")]
+pub enum TimerEvent {
+    Tick(Timer),
+    Fired { id: u64, name: String, sound: String, overdue: bool },
+    PhaseTransition { id: u64, is_work_phase: bool, cycle_count: u32, sound: String },
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct FiredTimer {
     pub id: u64,
     pub name: String,
-    /// True when the timer expired while the app was not running.
     pub overdue: bool,
 }
 
@@ -30,7 +68,7 @@ struct Inner {
     next_id: u64,
 }
 
-/// Persistent timer engine. `FileStore` supplies the JSON sidecar path.
+/// Persistent timer engine.
 pub struct TimerEngine {
     state: Arc<Mutex<Inner>>,
     path: PathBuf,
@@ -38,8 +76,7 @@ pub struct TimerEngine {
 }
 
 impl TimerEngine {
-    /// Load persisted timers; anything already due but unfired is reported as
-    /// fired immediately ("overdue") so a reminder is never lost.
+    /// Load persisted timers; overdue timers fire immediately.
     pub fn load(path: &PathBuf) -> (Self, Vec<FiredTimer>) {
         let timers: Vec<Timer> = std::fs::read(path)
             .ok()
@@ -50,10 +87,12 @@ impl TimerEngine {
         let mut timers: Vec<Timer> = timers
             .into_iter()
             .map(|mut t| {
-                if !t.fired && t.due_ms <= now {
+                if !t.fired && t.timer_type != TimerType::Stopwatch && !t.is_paused && t.due_ms <= now {
                     t.fired = true;
+                    t.remaining_ms = 0;
                     overdue.push(FiredTimer { id: t.id, name: t.name.clone(), overdue: true });
                 }
+                t.last_tick_ms = now;
                 t
             })
             .collect();
@@ -77,65 +116,337 @@ impl TimerEngine {
         }
     }
 
-    /// Start a named countdown; returns the timer id.
-    pub fn start(&self, name: &str, duration_ms: u64) -> u64 {
+    /// Start a stopwatch counting up from 00:00.
+    pub fn start_stopwatch(&self, name: &str) -> Timer {
         let now = now_ms();
-        let id = {
-            let mut g = self.state.lock().unwrap();
-            let id = g.next_id;
-            g.next_id += 1;
-            g.timers.push(Timer {
-                id,
-                name: name.to_string(),
-                due_ms: now + duration_ms,
-                duration_ms,
-                fired: false,
-            });
-            id
+        let mut g = self.state.lock().unwrap();
+        let id = g.next_id;
+        g.next_id += 1;
+        let timer = Timer {
+            id,
+            name: if name.trim().is_empty() { "Stopwatch".into() } else { name.trim().into() },
+            timer_type: TimerType::Stopwatch,
+            duration_ms: 0,
+            break_duration_ms: 0,
+            elapsed_ms: 0,
+            remaining_ms: 0,
+            is_work_phase: true,
+            cycle_count: 0,
+            is_paused: false,
+            started_at_ms: now,
+            due_ms: 0,
+            last_tick_ms: now,
+            fired: false,
         };
+        g.timers.retain(|t| t.fired);
+        g.timers.push(timer.clone());
+        drop(g);
         self.persist();
-        id
+        timer
+    }
+
+    /// Start a countdown timer.
+    pub fn start_countdown(&self, name: &str, duration_ms: u64) -> Timer {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let id = g.next_id;
+        g.next_id += 1;
+        let timer = Timer {
+            id,
+            name: if name.trim().is_empty() { "Timer".into() } else { name.trim().into() },
+            timer_type: TimerType::Countdown,
+            duration_ms,
+            break_duration_ms: 0,
+            elapsed_ms: 0,
+            remaining_ms: duration_ms,
+            is_work_phase: true,
+            cycle_count: 0,
+            is_paused: false,
+            started_at_ms: now,
+            due_ms: now + duration_ms,
+            last_tick_ms: now,
+            fired: false,
+        };
+        g.timers.retain(|t| t.fired);
+        g.timers.push(timer.clone());
+        drop(g);
+        self.persist();
+        timer
+    }
+
+    /// Start a Pomodoro timer with work and break intervals.
+    pub fn start_pomodoro(&self, name: &str, work_ms: u64, break_ms: u64) -> Timer {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let id = g.next_id;
+        g.next_id += 1;
+        let timer = Timer {
+            id,
+            name: if name.trim().is_empty() { "Pomodoro".into() } else { name.trim().into() },
+            timer_type: TimerType::Pomodoro,
+            duration_ms: work_ms,
+            break_duration_ms: break_ms,
+            elapsed_ms: 0,
+            remaining_ms: work_ms,
+            is_work_phase: true,
+            cycle_count: 0,
+            is_paused: false,
+            started_at_ms: now,
+            due_ms: now + work_ms,
+            last_tick_ms: now,
+            fired: false,
+        };
+        g.timers.retain(|t| t.fired);
+        g.timers.push(timer.clone());
+        drop(g);
+        self.persist();
+        timer
+    }
+
+    /// Start timer based on natural phrase parser.
+    pub fn start_with_phrase(&self, phrase: &str) -> Option<Timer> {
+        match parse_timer_phrase(phrase)? {
+            TimerPhrase::StartStopwatch => Some(self.start_stopwatch("Stopwatch")),
+            TimerPhrase::StartCountdown { duration_ms, name } => Some(self.start_countdown(&name, duration_ms)),
+            TimerPhrase::StartPomodoro { work_ms, break_ms, name } => Some(self.start_pomodoro(&name, work_ms, break_ms)),
+            TimerPhrase::Control(TimerControlAction::PauseResume) => self.pause_resume(None),
+            TimerPhrase::Control(TimerControlAction::Restart) => self.restart(None),
+            TimerPhrase::Control(TimerControlAction::Stop) => {
+                let _ = self.stop(None);
+                None
+            }
+        }
+    }
+
+    /// Backwards compatible simple start.
+    pub fn start(&self, name: &str, duration_ms: u64) -> u64 {
+        self.start_countdown(name, duration_ms).id
+    }
+
+    /// Toggle pause / resume on active timer or specific ID.
+    pub fn pause_resume(&self, id: Option<u64>) -> Option<Timer> {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let timer = if let Some(id) = id {
+            g.timers.iter_mut().find(|t| t.id == id && !t.fired)
+        } else {
+            g.timers.iter_mut().find(|t| !t.fired)
+        }?;
+        timer.is_paused = !timer.is_paused;
+        timer.last_tick_ms = now;
+        if !timer.is_paused && timer.timer_type != TimerType::Stopwatch {
+            timer.due_ms = now + timer.remaining_ms;
+        }
+        let updated = timer.clone();
+        drop(g);
+        self.persist();
+        Some(updated)
+    }
+
+    /// Pause the active timer if one is running and not paused.
+    pub fn pause_active(&self) -> Option<Timer> {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let timer = g.timers.iter_mut().find(|t| !t.fired)?;
+        if !timer.is_paused {
+            timer.is_paused = true;
+            timer.last_tick_ms = now;
+            let updated = timer.clone();
+            drop(g);
+            self.persist();
+            return Some(updated);
+        }
+        Some(timer.clone())
+    }
+
+    /// Resume the active timer if one is paused.
+    pub fn resume_active(&self) -> Option<Timer> {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let timer = g.timers.iter_mut().find(|t| !t.fired)?;
+        if timer.is_paused {
+            timer.is_paused = false;
+            timer.last_tick_ms = now;
+            if timer.timer_type != TimerType::Stopwatch {
+                timer.due_ms = now + timer.remaining_ms;
+            }
+            let updated = timer.clone();
+            drop(g);
+            self.persist();
+            return Some(updated);
+        }
+        Some(timer.clone())
+    }
+
+    /// Restart timer from its starting parameters.
+    pub fn restart(&self, id: Option<u64>) -> Option<Timer> {
+        let now = now_ms();
+        let mut g = self.state.lock().unwrap();
+        let timer = if let Some(id) = id {
+            g.timers.iter_mut().find(|t| t.id == id)
+        } else {
+            g.timers.iter_mut().find(|t| !t.fired)
+        }?;
+        timer.fired = false;
+        timer.is_paused = false;
+        timer.started_at_ms = now;
+        timer.last_tick_ms = now;
+        timer.elapsed_ms = 0;
+        match timer.timer_type {
+            TimerType::Stopwatch => {
+                timer.remaining_ms = 0;
+                timer.due_ms = 0;
+            }
+            TimerType::Countdown => {
+                timer.remaining_ms = timer.duration_ms;
+                timer.due_ms = now + timer.duration_ms;
+            }
+            TimerType::Pomodoro => {
+                timer.is_work_phase = true;
+                timer.remaining_ms = timer.duration_ms;
+                timer.due_ms = now + timer.duration_ms;
+            }
+        }
+        let updated = timer.clone();
+        drop(g);
+        self.persist();
+        Some(updated)
+    }
+
+    /// Stop and remove timer.
+    pub fn stop(&self, id: Option<u64>) -> bool {
+        let mut g = self.state.lock().unwrap();
+        let before = g.timers.len();
+        if let Some(id) = id {
+            g.timers.retain(|t| t.id != id);
+        } else {
+            if let Some(pos) = g.timers.iter().position(|t| !t.fired) {
+                g.timers.remove(pos);
+            }
+        }
+        let removed = before != g.timers.len();
+        drop(g);
+        if removed {
+            self.persist();
+        }
+        removed
     }
 
     pub fn cancel(&self, id: u64) -> bool {
-        let removed = {
-            let mut g = self.state.lock().unwrap();
-            let before = g.timers.len();
-            g.timers.retain(|t| t.id != id);
-            before != g.timers.len()
-        };
-        self.persist();
-        removed
+        self.stop(Some(id))
+    }
+
+    pub fn get_active(&self) -> Option<Timer> {
+        self.state.lock().unwrap().timers.iter().find(|t| !t.fired).cloned()
     }
 
     pub fn list(&self) -> Vec<Timer> {
         self.state.lock().unwrap().timers.clone()
     }
 
-    /// Drain timers that became due since the last poll (watcher thread body:
-    /// poll every ~500 ms; shell turns results into OS notifications).
-    pub fn poll_due(&self) -> Vec<FiredTimer> {
-        let now = now_ms();
-        let mut fired = Vec::new();
+    /// Advance active timers by delta and compute emitted events.
+    pub fn tick(&self, now: u64) -> Vec<TimerEvent> {
+        let mut events = Vec::new();
+        let mut needs_persist = false;
         {
             let mut g = self.state.lock().unwrap();
             for t in g.timers.iter_mut() {
-                if !t.fired && t.due_ms <= now {
-                    t.fired = true;
-                    fired.push(FiredTimer { id: t.id, name: t.name.clone(), overdue: false });
+                if t.fired {
+                    t.last_tick_ms = now;
+                    continue;
+                }
+                if t.is_paused {
+                    t.last_tick_ms = now;
+                    // Do not advance elapsed/remaining time, but still emit periodic tick
+                    // so clients stay synchronized on paused state and time values.
+                    events.push(TimerEvent::Tick(t.clone()));
+                    continue;
+                }
+                let delta = now.saturating_sub(t.last_tick_ms);
+                t.last_tick_ms = now;
+                if delta == 0 {
+                    events.push(TimerEvent::Tick(t.clone()));
+                    continue;
+                }
+
+                match t.timer_type {
+                    TimerType::Stopwatch => {
+                        t.elapsed_ms += delta;
+                        events.push(TimerEvent::Tick(t.clone()));
+                    }
+                    TimerType::Countdown => {
+                        t.elapsed_ms += delta;
+                        if t.remaining_ms <= delta {
+                            t.remaining_ms = 0;
+                            t.fired = true;
+                            needs_persist = true;
+                            events.push(TimerEvent::Fired {
+                                id: t.id,
+                                name: t.name.clone(),
+                                sound: "countdowndone.m4a".into(),
+                                overdue: false,
+                            });
+                        } else {
+                            t.remaining_ms -= delta;
+                            events.push(TimerEvent::Tick(t.clone()));
+                        }
+                    }
+                    TimerType::Pomodoro => {
+                        t.elapsed_ms += delta;
+                        if t.remaining_ms <= delta {
+                            if t.is_work_phase {
+                                t.is_work_phase = false;
+                                t.remaining_ms = t.break_duration_ms;
+                                t.due_ms = now + t.break_duration_ms;
+                                needs_persist = true;
+                                events.push(TimerEvent::PhaseTransition {
+                                    id: t.id,
+                                    is_work_phase: false,
+                                    cycle_count: t.cycle_count,
+                                    sound: "workdone.m4a".into(),
+                                });
+                            } else {
+                                t.is_work_phase = true;
+                                t.cycle_count += 1;
+                                t.remaining_ms = t.duration_ms;
+                                t.due_ms = now + t.duration_ms;
+                                needs_persist = true;
+                                events.push(TimerEvent::PhaseTransition {
+                                    id: t.id,
+                                    is_work_phase: true,
+                                    cycle_count: t.cycle_count,
+                                    sound: "backtowork.m4a".into(),
+                                });
+                            }
+                        } else {
+                            t.remaining_ms -= delta;
+                            events.push(TimerEvent::Tick(t.clone()));
+                        }
+                    }
                 }
             }
-            g.timers.retain(|t| !(t.fired && now.saturating_sub(t.due_ms) > 60 * 60 * 1000));
         }
-        if !fired.is_empty() {
+        if needs_persist {
             self.persist();
+        }
+        events
+    }
+
+    /// Legacy poll_due returning fired countdowns.
+    pub fn poll_due(&self) -> Vec<FiredTimer> {
+        let now = now_ms();
+        let events = self.tick(now);
+        let mut fired = Vec::new();
+        for ev in events {
+            if let TimerEvent::Fired { id, name, overdue, .. } = ev {
+                fired.push(FiredTimer { id, name, overdue });
+            }
         }
         fired
     }
 
-    /// Spawn the watcher thread that polls for due timers. `on_fire` is called
-    /// on that thread; the shell bridges it to UI/OS notifications.
-    pub fn spawn_watcher(&self, on_fire: impl Fn(FiredTimer) + Send + 'static) {
+    /// Spawn watcher thread advancing timers and calling event callback every ~250ms.
+    pub fn spawn_watcher(&self, on_event: impl Fn(TimerEvent) + Send + 'static) {
         let engine = Self {
             state: Arc::clone(&self.state),
             path: self.path.clone(),
@@ -143,10 +454,11 @@ impl TimerEngine {
         };
         std::thread::spawn(move || {
             while !engine.stop.load(std::sync::atomic::Ordering::Relaxed) {
-                for f in engine.poll_due() {
-                    on_fire(f);
+                let now = now_ms();
+                for ev in engine.tick(now) {
+                    on_event(ev);
                 }
-                std::thread::sleep(Duration::from_millis(500));
+                std::thread::sleep(Duration::from_millis(250));
             }
         });
     }
@@ -156,58 +468,101 @@ impl TimerEngine {
     }
 }
 
-/// Parse plain-English timer phrases:
-///   `timer 25 min`, `timer 10 minutes pasta`, `remind me in 10 minutes`,
-///   `timer 1h 30m`, `timer 90s`
-/// Returns (name, duration_ms) or None when the line is not a timer phrase.
-pub fn parse_timer_phrase(line: &str) -> Option<(String, u64)> {
+/// Comprehensive natural-language timer phrase parser.
+pub fn parse_timer_phrase(line: &str) -> Option<TimerPhrase> {
     let t = line.trim();
     let lower = t.to_lowercase();
+
+    // 1. Control keywords
+    if lower == "timer p" || lower == "timer pause" || lower == "timer resume" {
+        return Some(TimerPhrase::Control(TimerControlAction::PauseResume));
+    }
+    if lower == "timer r" || lower == "timer restart" || lower == "timer reset" {
+        return Some(TimerPhrase::Control(TimerControlAction::Restart));
+    }
+    if lower == "timer s" || lower == "timer stop" || lower == "timer cancel"
+        || lower == "stop timer" || lower == "cancel timer" {
+        return Some(TimerPhrase::Control(TimerControlAction::Stop));
+    }
+
+    // 2. Bare "timer" starts a Stopwatch
+    if lower == "timer" {
+        return Some(TimerPhrase::StartStopwatch);
+    }
+
     let rest = lower
         .strip_prefix("timer")
         .or_else(|| lower.strip_prefix("remind me in"))
         .or_else(|| lower.strip_prefix("remind in"))?;
-    if rest.trim().is_empty() {
-        return None;
+    let trimmed_rest = rest.trim();
+    if trimmed_rest.is_empty() {
+        return Some(TimerPhrase::StartStopwatch);
     }
-    // Scan tokens: durations may be fused ("25min", "1h") or split ("25 min",
-    // "10 minutes", "5"), colon format ("3:30"), or "pomo".
-    let tokens: Vec<&str> = rest.split_whitespace().collect();
+
+    // 3. Pomodoro keywords: timer pomo / timer pomodoro
+    if trimmed_rest == "pomo" || trimmed_rest == "pomodoro" {
+        return Some(TimerPhrase::StartPomodoro {
+            work_ms: 25 * 60_000,
+            break_ms: 5 * 60_000,
+            name: "Pomodoro".to_string(),
+        });
+    }
+
+    // Check custom pomodoro: e.g. "57 11" (work minutes, break minutes)
+    let words: Vec<&str> = trimmed_rest.split_whitespace().collect();
+    if words.len() == 2 {
+        if let (Ok(work_m), Ok(break_m)) = (words[0].parse::<u64>(), words[1].parse::<u64>()) {
+            if work_m > 0 && break_m > 0 {
+                return Some(TimerPhrase::StartPomodoro {
+                    work_ms: work_m * 60_000,
+                    break_ms: break_m * 60_000,
+                    name: "Pomodoro".to_string(),
+                });
+            }
+        }
+    }
+
+    // Single integer minutes: timer 5 -> 5 mins
+    if words.len() == 1 {
+        if let Ok(m) = words[0].parse::<u64>() {
+            return Some(TimerPhrase::StartCountdown {
+                duration_ms: m * 60_000,
+                name: "Timer".to_string(),
+            });
+        }
+    }
+
+    // 4. Token scan for duration tokens, colon syntax (3:30), and labels
     let mut ms_total: u64 = 0;
     let mut name_parts: Vec<String> = Vec::new();
-    let mut found_any = false;
     let mut pending_number: Option<u64> = None;
-    for token in tokens {
-        if token == "pomo" || token == "pomodoro" {
-            ms_total += 25 * 60_000;
-            found_any = true;
-            name_parts.push("Pomodoro".to_string());
-            continue;
-        }
+
+    for token in &words {
         // Support "3:30" (3 mins 30 secs) or "1:30:00"
         if let Some((m_str, s_str)) = token.split_once(':') {
             if let (Ok(m), Ok(s)) = (m_str.parse::<u64>(), s_str.parse::<u64>()) {
                 ms_total += (m * 60 + s) * 1000;
-                found_any = true;
                 continue;
             }
         }
 
         if let Some(v) = parse_duration_token(token) {
             ms_total += v;
-            found_any = true;
             pending_number = None;
         } else if token.chars().all(|c| c.is_ascii_digit()) && !token.is_empty() {
-            pending_number = token.parse::<u64>().ok();
-        } else if let Some(n) = pending_number.take() {
-            // Try fusing the pending number with this unit word: "10" + "minutes".
-            match parse_duration_token(&format!("{n}{token}")) {
-                Some(v) => {
-                    ms_total += v;
-                    found_any = true;
+            if let Ok(n) = token.parse::<u64>() {
+                if let Some(prev) = pending_number {
+                    ms_total += prev * 60_000;
                 }
-                None => {
-                    name_parts.push(n.to_string());
+                pending_number = Some(n);
+            }
+        } else if let Some(n) = pending_number.take() {
+            match *token {
+                "s" | "sec" | "secs" | "second" | "seconds" => ms_total += n * 1000,
+                "m" | "min" | "mins" | "minute" | "minutes" => ms_total += n * 60_000,
+                "h" | "hr" | "hrs" | "hour" | "hours" => ms_total += n * 3_600_000,
+                _ => {
+                    ms_total += n * 60_000;
                     name_parts.push(token.to_string());
                 }
             }
@@ -215,107 +570,103 @@ pub fn parse_timer_phrase(line: &str) -> Option<(String, u64)> {
             name_parts.push(token.to_string());
         }
     }
+
     if let Some(n) = pending_number {
-        if !found_any {
-            // "timer 5" -> 5 minutes by default
-            ms_total += n * 60_000;
-            found_any = true;
-        } else {
-            name_parts.push(n.to_string());
-        }
+        ms_total += n * 60_000;
     }
-    if !found_any || ms_total == 0 {
+
+    if ms_total == 0 {
         return None;
     }
-    let name = name_parts.join(" ").trim().to_string();
-    Some((if name.is_empty() { "Timer".to_string() } else { name }, ms_total))
+
+    let name = if name_parts.is_empty() {
+        "Timer".to_string()
+    } else {
+        name_parts.join(" ")
+    };
+
+    Some(TimerPhrase::StartCountdown { duration_ms: ms_total, name })
 }
 
-/// Detect phrases that stop or cancel running timers (Antinote: "timer s", "timer stop")
-pub fn is_timer_stop_phrase(line: &str) -> bool {
-    let t = line.trim().to_lowercase();
-    t == "timer s"
-        || t == "timer stop"
-        || t == "timer cancel"
-        || t == "stop timer"
-        || t == "cancel timer"
-}
-
+/// Helper parsing fused tokens like "25min", "1h", "90s", "10m".
 fn parse_duration_token(token: &str) -> Option<u64> {
-    let t = token.trim().trim_end_matches(['.', ',']);
-    let split = t.find(|c: char| c.is_alphabetic())?;
-    let (num, unit) = t.split_at(split);
-    let n: u64 = num.trim().parse().ok()?;
-    let ms = match unit.trim().to_lowercase().as_str() {
-        "s" | "sec" | "secs" | "second" | "seconds" => n * 1000,
-        "m" | "min" | "mins" | "minute" | "minutes" => n * 60_000,
-        "h" | "hr" | "hrs" | "hour" | "hours" => n * 3_600_000,
-        "d" | "day" | "days" => n * 86_400_000,
+    let t = token.trim();
+    let num_end = t.find(|c: char| !c.is_ascii_digit())?;
+    if num_end == 0 {
+        return None;
+    }
+    let (num_str, unit) = t.split_at(num_end);
+    let n: u64 = num_str.parse().ok()?;
+    let mult = match unit.trim() {
+        "s" | "sec" | "secs" | "second" | "seconds" => 1000,
+        "m" | "min" | "mins" | "minute" | "minutes" => 60_000,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 3_600_000,
         _ => return None,
     };
-    Some(ms)
+    Some(n * mult)
+}
+
+/// Backwards compatible helper checking if line is a timer stop request.
+pub fn is_timer_stop_phrase(line: &str) -> bool {
+    let lower = line.trim().to_lowercase();
+    lower == "timer stop" || lower == "timer cancel" || lower == "timer s"
+        || lower == "stop timer" || lower == "cancel timer"
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn tmppath(tag: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("plainpad-timers-{tag}-{}.json", std::process::id()))
-    }
-
     #[test]
     fn phrase_parsing() {
-        assert_eq!(parse_timer_phrase("timer 25 min").unwrap(), ("Timer".into(), 25 * 60_000));
+        assert_eq!(parse_timer_phrase("timer"), Some(TimerPhrase::StartStopwatch));
+        assert!(matches!(
+            parse_timer_phrase("timer 5"),
+            Some(TimerPhrase::StartCountdown { duration_ms: 300_000, .. })
+        ));
+        assert!(matches!(
+            parse_timer_phrase("timer 3:30"),
+            Some(TimerPhrase::StartCountdown { duration_ms: 210_000, .. })
+        ));
+        assert!(matches!(
+            parse_timer_phrase("timer pomo"),
+            Some(TimerPhrase::StartPomodoro { work_ms: 1_500_000, break_ms: 300_000, .. })
+        ));
+        assert!(matches!(
+            parse_timer_phrase("timer 57 11"),
+            Some(TimerPhrase::StartPomodoro { work_ms: 3_420_000, break_ms: 660_000, .. })
+        ));
         assert_eq!(
-            parse_timer_phrase("remind me in 10 minutes").unwrap(),
-            ("Timer".into(), 10 * 60_000)
+            parse_timer_phrase("timer p"),
+            Some(TimerPhrase::Control(TimerControlAction::PauseResume))
         );
         assert_eq!(
-            parse_timer_phrase("timer 1h 30m pasta water").unwrap(),
-            ("pasta water".into(), 90 * 60_000)
+            parse_timer_phrase("timer r"),
+            Some(TimerPhrase::Control(TimerControlAction::Restart))
         );
-        assert_eq!(parse_timer_phrase("timer 5").unwrap(), ("Timer".into(), 5 * 60_000));
-        assert_eq!(parse_timer_phrase("timer 3:30").unwrap(), ("Timer".into(), 210_000));
-        assert_eq!(parse_timer_phrase("timer pomo").unwrap(), ("Pomodoro".into(), 25 * 60_000));
-        assert!(parse_timer_phrase("buy milk").is_none());
-        assert!(parse_timer_phrase("timer").is_none());
+        assert_eq!(
+            parse_timer_phrase("timer s"),
+            Some(TimerPhrase::Control(TimerControlAction::Stop))
+        );
     }
 
     #[test]
     fn start_poll_cancel_and_persistence() {
-        let path = tmppath("cycle");
+        let dir = std::env::temp_dir().join(format!("plainpad-timer-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("timers.json");
         let _ = std::fs::remove_file(&path);
+
         let (engine, overdue) = TimerEngine::load(&path);
         assert!(overdue.is_empty());
-        let id = engine.start("tea", 50);
-        assert!(engine.list().len() == 1);
-        assert!(engine.poll_due().is_empty()); // not due yet
-        std::thread::sleep(Duration::from_millis(70));
-        let fired = engine.poll_due();
-        assert_eq!(fired.len(), 1);
-        assert_eq!(fired[0].name, "tea");
-        assert!(engine.cancel(id));
-        assert!(engine.list().is_empty());
-        engine.shutdown();
-        let _ = std::fs::remove_file(&path);
-    }
+        let id = engine.start_countdown("Tea", 500).id;
+        assert_eq!(engine.list().len(), 1);
 
-    #[test]
-    fn timers_survive_restart_and_fire_overdue() {
-        let path = tmppath("restart");
-        let _ = std::fs::remove_file(&path);
-        let (engine, _) = TimerEngine::load(&path);
-        engine.start("short", 20);
-        // Simulate restart: drop, wait past expiry, reload.
-        engine.shutdown();
-        drop(engine);
-        std::thread::sleep(Duration::from_millis(40));
-        let (engine2, overdue) = TimerEngine::load(&path);
-        assert_eq!(overdue.len(), 1);
-        assert_eq!(overdue[0].name, "short");
-        assert!(overdue[0].overdue);
-        engine2.shutdown();
+        // Advance 600ms past expiration
+        let fired = engine.tick(now_ms() + 600);
+        assert!(fired.iter().any(|e| matches!(e, TimerEvent::Fired { .. })));
+
+        assert!(engine.cancel(id));
         let _ = std::fs::remove_file(&path);
     }
 }

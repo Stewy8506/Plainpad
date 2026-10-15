@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-15T13:40:00+05:30
+updated: 2026-10-15T15:35:00+05:30
 ---
 
 # Project State
@@ -7,32 +7,32 @@ updated: 2026-10-15T13:40:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 6 - Rich Editor Capabilities & Modal Vim Mode  
+**Phase:** 7 - JavaScript Extension Runtime & AI Model Catalog  
 **Status:** complete & verified  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-6 complete: 16/16 plans; Phase 7 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-22 Complete: 22/30)  
-**Phase 6 Verification:** `.gsd/phases/6/VERIFICATION.md` (Status: PASS, 15/15 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-7 complete: 18/18 plans; Phase 8 next)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-25 Complete: 25/30)  
+**Phase 7 Verification:** `.gsd/phases/7/VERIFICATION.md` (Status: PASS, 11/11 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and independent verification of **Phase 6: Rich Editor Capabilities & Modal Vim Mode**:
-  - `01-PLAN.md`: Interactive inline checkboxes (`- [ ]`, `- [x]`, `* [ ]`, `+ [ ]`, `[ ]`, `[x]`), list auto-continuation (`- `, `* `, `1. `) and blank Enter termination, Antilink URL shortening (`github.com/...`) with full URL preservation, rounded code blocks with "Copy Code" button, and SQLite relational synchronization (`checklist_items` and `antilinks` tables).
-  - `02-PLAN.md`: Full modal Vim Mode engine (`NORMAL`, `INSERT`, `VISUAL`, `VISUAL_LINE`), standard motions (`h,j,k,l,w,b,e,0,$,gg,G`), action operators (`d,y,p,P,u,x,c,r,i,a,o,O`), debounced motion handler (`debounceTimerForVimMotions`), pulsing block caret, `#vim-status-indicator`, and `activateVimMode` setting toggle.
-  - `03-PLAN.md`: Heading cycle (`Ctrl+H`), inline markdown formatting (`Ctrl+B`, `Ctrl+I`, `Ctrl+Shift+X`, `Ctrl+U`), read-only mode (`Ctrl+Shift+R`), sub-pixel vertical caret baseline nudging (`_caretVerticalNudgeRaw`, `_caretVerticalNudgeForListsRaw`) with dynamic list detection, and Right-To-Left (`dir="rtl"`) text layout with mirrored overlay coordinates (`Ctrl+Shift+L`).
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 15 empirical checks across 138 unit & integration tests, TypeScript typechecking, and headless browser-environment checks.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-18 through REQ-22 Complete.
+- Completed full execution and independent verification of **Phase 7: JavaScript Extension Runtime & AI Model Catalog**:
+  - `01-PLAN.md`: SQLite credential store in `app_state` (`apikey_openai`, `apikey_anthropic`), origin whitelisting (`https://` enforcement, localhost allowed), in-flight `{{API_KEY}}` secret substitution, data privacy scoping (`none`, `line`, `full`), native `call_api` bridge IPC, and TypeScript runtime compatibility layer running `antinote-extensions-base-v0.0.1.js` (`Extension`, `Command`, `Preference`, `Parameter`, `TutorialCommand`, `ReturnObject`, `MathEvaluator`).
+  - `02-PLAN.md`: Multi-provider AI Model Catalog (`fetch_ai_models` for OpenAI, Anthropic, Ollama), double-colon `::commandName(...)` and alias `command(...)` editor syntax parsing, non-blocking execution with visual status indicator (`#extension-status-indicator`), return type routing (`insert`, `replaceLine`, `replaceAll`, `openURL`), sample OpenAI extension registration (`sample-openai-extension.js`), and dedicated "Extensions & AI Providers" settings panel.
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 11 empirical checks across 146 unit & integration tests, TypeScript typechecking, UI bundling, and standalone Node.js runtime validation.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-23 through REQ-25 Complete.
 
 ## Next Steps
 
-1. Batch commit Phase 6 to git: `feat(phase-6): implement rich editor capabilities and modal vim mode`.
-2. Plan Phase 7: JavaScript Extension Runtime & AI Model Catalog (`/plan 7`).
-   - Embedded JS engine running `antinote-extensions-base-v0.0.1.js`
-   - Secure native `callAPI` bridge with credential store
-   - Double-colon command syntax `::command(...)`
-   - Multi-provider AI model catalog (OpenAI, Anthropic, local Ollama)
-3. Execute Phase 7 plans.
-4. Verify Phase 7 deliverables (REQ-23 through REQ-25).
-5. Batch commit Phase 7.
+1. Batch commit Phase 7 to git: `feat(phase-7): implement javascript extension runtime and ai model catalog`.
+2. Plan Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite (`/plan 8`).
+   - Translucent glass floating window, global summon hotkey (`Ctrl+Space`), system tray
+   - WebGL Void distortion shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`)
+   - Canvas grid background overlays (`dots`, `smallGrid`, `bigGrid`)
+   - Find & Replace search engine (`FindAndReplaceManager`)
+   - Third-party export suite (Markdown, Plaintext, Obsidian, Bear, Apple Notes, Notion, Custom URL, ZIP)
+3. Execute Phase 8 plans.
+4. Verify Phase 8 deliverables (REQ-26 through REQ-30).
+5. Complete Milestone audit.
 
 ## Active Decisions
 
@@ -43,6 +43,7 @@ updated: 2026-10-15T13:40:00+05:30
 | Slotted note keys | Hermes(0) to Zeus(8), `Ctrl+1..9` jump, `Ctrl+Tab` cycle | 2026-10-13 | Phase 2, UI |
 | Math & Conversion Engine | Fend + custom preprocessor & affine 5-domain unit system | 2026-10-13 | Phase 3, Phase 4 |
 | Timer & Pomodoro Engine | Delta-based background tick, JSON persistence, circular SVG pill UI | 2026-10-15 | Phase 5, UI, Shell |
+| JS Extensions Architecture | Sandboxed TS runtime + native Rust callAPI bridge with SQLite credential store | 2026-10-15 | Phase 7 |
 | Commit cadence | Commit once per completed phase (per user rule) | 2026-10-13 | Execution workflow |
 | Planning methodology | GSD (SPEC → PLAN → EXECUTE → VERIFY → COMMIT) | 2026-10-13 | Entire project lifecycle |
 
@@ -52,4 +53,4 @@ None.
 
 ## Concerns
 
-- Extensions runtime in Tauri: Requires lightweight JavaScript engine (`boa` or QuickJS) in Rust backend to run extensions identically.
+None. Phase 7 is fully verified and stable.

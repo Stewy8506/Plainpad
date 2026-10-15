@@ -37,9 +37,9 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-20** | **Smart Antilinks**: URL auto-detection with compact domain pill display while maintaining underlying destination URL and opt-out skip list. | SPEC §7 | 6 | Complete |
 | **REQ-21** | **Rounded Code Blocks**: Fenced code block rendering with rounded corner backgrounds, syntax highlighting, and "Copy Code" action button. | SPEC §7 | 6 | Complete |
 | **REQ-22** | **Modal Vim Mode**: Normal, Insert, Visual, and Visual Line modes with standard motions (`h,j,k,l,w,b,e,0,$,gg,G`) and actions (`d,y,p,u,x,c,r,i,a,o,O`). | SPEC §7 | 6 | Complete |
-| **REQ-23** | **JavaScript Extension Runtime**: Sandboxed JS engine executing `antinote-extensions-base-v0.0.1.js` classes (`Extension`, `Command`, `Preference`, `ReturnObject`). | SPEC §8.1 | 7 | Pending |
-| **REQ-24** | **Secure Native API Bridge**: `callAPI` function injecting credentials from secure storage and scoping text access (`none`, `line`, `full`). | SPEC §8.1 | 7 | Pending |
-| **REQ-25** | **AI Model Catalog & Command Syntax**: Invocation syntax `::commandName(...)` and catalog support for OpenAI, Anthropic, and local Ollama (`localhost:11434`). | SPEC §8.2 | 7 | Pending |
+| **REQ-23** | **JavaScript Extension Runtime**: Sandboxed JS engine executing `antinote-extensions-base-v0.0.1.js` classes (`Extension`, `Command`, `Preference`, `ReturnObject`). | SPEC §8.1 | 7 | Complete |
+| **REQ-24** | **Secure Native API Bridge**: `callAPI` function injecting credentials from secure storage and scoping text access (`none`, `line`, `full`). | SPEC §8.1 | 7 | Complete |
+| **REQ-25** | **AI Model Catalog & Command Syntax**: Invocation syntax `::commandName(...)` and catalog support for OpenAI, Anthropic, and local Ollama (`localhost:11434`). | SPEC §8.2 | 7 | Complete |
 | **REQ-26** | **Floating Glass Window & Hotkey**: Translucent backdrop blur, global summon shortcut (`Ctrl+Space`), system tray icon/menu, and always-on-top pin persistence. | SPEC §9, §11 | 8 | Pending |
 | **REQ-27** | **The Void Shaders**: WebGL/Canvas fragment shaders replicating `voidRipple`, `voidDistortionSlow`, and `voidDistortionBurst` with permanent purge confirmation. | SPEC §9 | 8 | Pending |
 | **REQ-28** | **Canvas Textures & Typography**: Background overlays (`dots`, `smallGrid`, `bigGrid`), sub-pixel vertical caret nudging, and RTL text layout. | SPEC §7, §9, §11 | 8 | Pending |
@@ -69,5 +69,5 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | REQ-12 .. REQ-14 | Phase 4 | `crates/plainpad-core/src/intent.rs`, `ui/src/editor.ts` | Complete |
 | REQ-15 .. REQ-17 | Phase 5 | `crates/plainpad-core/src/timers.rs`, `ui/src/timer.ts` | Complete |
 | REQ-18 .. REQ-22 | Phase 6 | `ui/src/editor.ts`, `ui/src/vim.ts` | Complete |
-| REQ-23 .. REQ-25 | Phase 7 | `crates/plainpad-core/src/extensions.rs`, `ui/src/extensions.ts` | Planned |
+| REQ-23 .. REQ-25 | Phase 7 | `crates/plainpad-core/src/extensions.rs`, `ui/src/extensions.ts` | Complete |
 | REQ-26 .. REQ-30 | Phase 8 | `ui/src/shaders.ts`, `export.rs`, `src-tauri/src/main.rs` | Planned |

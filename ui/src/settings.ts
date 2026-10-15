@@ -133,6 +133,42 @@ const selExportFormat = document.getElementById('setting-export-format') as HTML
 const selTrashRetention = document.getElementById('setting-trash-retention') as HTMLSelectElement;
 const btnEmptyTrash = document.getElementById('btn-empty-trash') as HTMLButtonElement;
 
+// Extensions & AI Providers
+interface ApiKeyMeta {
+  key_name: string;
+  is_configured: boolean;
+  masked_preview: string;
+}
+
+interface AiModel {
+  id: string;
+  name: string;
+  provider: string;
+  context_length?: number;
+}
+
+const keyInputOpenai = document.getElementById('key-input-openai') as HTMLInputElement | null;
+const btnToggleOpenai = document.getElementById('btn-toggle-openai') as HTMLButtonElement | null;
+const btnSaveOpenai = document.getElementById('btn-save-openai') as HTMLButtonElement | null;
+const btnClearOpenai = document.getElementById('btn-clear-openai') as HTMLButtonElement | null;
+const badgeStatusOpenai = document.getElementById('badge-status-openai') as HTMLElement | null;
+
+const keyInputAnthropic = document.getElementById('key-input-anthropic') as HTMLInputElement | null;
+const btnToggleAnthropic = document.getElementById('btn-toggle-anthropic') as HTMLButtonElement | null;
+const btnSaveAnthropic = document.getElementById('btn-save-anthropic') as HTMLButtonElement | null;
+const btnClearAnthropic = document.getElementById('btn-clear-anthropic') as HTMLButtonElement | null;
+const badgeStatusAnthropic = document.getElementById('badge-status-anthropic') as HTMLElement | null;
+
+const hostInputOllama = document.getElementById('host-input-ollama') as HTMLInputElement | null;
+const btnTestOllama = document.getElementById('btn-test-ollama') as HTMLButtonElement | null;
+const badgeStatusOllama = document.getElementById('badge-status-ollama') as HTMLElement | null;
+
+const selAiDefaultModel = document.getElementById('setting-ai-default-model') as HTMLSelectElement | null;
+const btnRefreshModels = document.getElementById('btn-refresh-models') as HTMLButtonElement | null;
+
+const selExtPrefOpenaiModel = document.getElementById('ext-pref-openai-model') as HTMLSelectElement | null;
+const txtExtPrefOpenaiSystemPrompt = document.getElementById('ext-pref-openai-systemPrompt') as HTMLTextAreaElement | null;
+
 // ---------- Tab Switching ----------
 
 function setupTabs(): void {
@@ -350,6 +386,73 @@ async function loadSettings(): Promise<void> {
   await updateRatesStatus();
   await updateStoragePath();
   await loadTriggerSettings();
+  await loadApiKeysAndExtensions(settings);
+}
+
+async function loadApiKeysAndExtensions(settings: Record<string, unknown>): Promise<void> {
+  try {
+    const keys = (await invoke<ApiKeyMeta[]>('list_api_keys')) || [];
+    const openaiMeta = keys.find((k) => k.key_name === 'apikey_openai');
+    if (badgeStatusOpenai && keyInputOpenai) {
+      if (openaiMeta && openaiMeta.is_configured) {
+        badgeStatusOpenai.textContent = 'Configured';
+        badgeStatusOpenai.className = 'status-badge configured';
+        keyInputOpenai.placeholder = openaiMeta.masked_preview || 'sk-...xxxx';
+      } else {
+        badgeStatusOpenai.textContent = 'Not Set';
+        badgeStatusOpenai.className = 'status-badge missing';
+        keyInputOpenai.placeholder = 'sk-...';
+      }
+    }
+
+    const anthropicMeta = keys.find((k) => k.key_name === 'apikey_anthropic');
+    if (badgeStatusAnthropic && keyInputAnthropic) {
+      if (anthropicMeta && anthropicMeta.is_configured) {
+        badgeStatusAnthropic.textContent = 'Configured';
+        badgeStatusAnthropic.className = 'status-badge configured';
+        keyInputAnthropic.placeholder = anthropicMeta.masked_preview || 'sk-ant-...xxxx';
+      } else {
+        badgeStatusAnthropic.textContent = 'Not Set';
+        badgeStatusAnthropic.className = 'status-badge missing';
+        keyInputAnthropic.placeholder = 'sk-ant-...';
+      }
+    }
+
+    if (hostInputOllama && settings.ollama_host) {
+      hostInputOllama.value = String(settings.ollama_host);
+    }
+
+    if (selAiDefaultModel && settings.ai_default_model) {
+      selAiDefaultModel.value = String(settings.ai_default_model);
+    }
+
+    // Load extension preferences
+    try {
+      const savedModel = await invoke<string | null>('get_extension_preference', {
+        extensionName: 'openai',
+        key: 'model',
+      });
+      if (selExtPrefOpenaiModel && savedModel) {
+        selExtPrefOpenaiModel.value = savedModel;
+      }
+    } catch {
+      // Ignore
+    }
+
+    try {
+      const savedPrompt = await invoke<string | null>('get_extension_preference', {
+        extensionName: 'openai',
+        key: 'systemPrompt',
+      });
+      if (txtExtPrefOpenaiSystemPrompt && savedPrompt) {
+        txtExtPrefOpenaiSystemPrompt.value = savedPrompt;
+      }
+    } catch {
+      // Ignore
+    }
+  } catch (err) {
+    console.error('Failed to load API keys or extension preferences:', err);
+  }
 }
 
 function parseCommaAliases(val: string): string[] {
@@ -593,6 +696,174 @@ function wireEvents(): void {
       btnEmptyTrash.textContent = originalText;
       btnEmptyTrash.disabled = false;
     }, 2000);
+  });
+
+  wireExtensionEvents();
+}
+
+function wireExtensionEvents(): void {
+  // Toggle password visibility
+  btnToggleOpenai?.addEventListener('click', () => {
+    if (keyInputOpenai) {
+      keyInputOpenai.type = keyInputOpenai.type === 'password' ? 'text' : 'password';
+    }
+  });
+
+  btnToggleAnthropic?.addEventListener('click', () => {
+    if (keyInputAnthropic) {
+      keyInputAnthropic.type = keyInputAnthropic.type === 'password' ? 'text' : 'password';
+    }
+  });
+
+  // Save OpenAI Key
+  btnSaveOpenai?.addEventListener('click', async () => {
+    const val = keyInputOpenai?.value.trim();
+    if (!val) return;
+    try {
+      await invoke('store_api_key', { keyName: 'apikey_openai', keyValue: val });
+      if (keyInputOpenai) keyInputOpenai.value = '';
+      const settings = (await invoke<Record<string, unknown>>('get_settings')) || {};
+      await loadApiKeysAndExtensions(settings);
+    } catch (err) {
+      console.error('Failed to save OpenAI API key:', err);
+    }
+  });
+
+  // Clear OpenAI Key
+  btnClearOpenai?.addEventListener('click', async () => {
+    try {
+      await invoke('delete_api_key', { keyName: 'apikey_openai' });
+      if (keyInputOpenai) keyInputOpenai.value = '';
+      const settings = (await invoke<Record<string, unknown>>('get_settings')) || {};
+      await loadApiKeysAndExtensions(settings);
+    } catch (err) {
+      console.error('Failed to clear OpenAI API key:', err);
+    }
+  });
+
+  // Save Anthropic Key
+  btnSaveAnthropic?.addEventListener('click', async () => {
+    const val = keyInputAnthropic?.value.trim();
+    if (!val) return;
+    try {
+      await invoke('store_api_key', { keyName: 'apikey_anthropic', keyValue: val });
+      if (keyInputAnthropic) keyInputAnthropic.value = '';
+      const settings = (await invoke<Record<string, unknown>>('get_settings')) || {};
+      await loadApiKeysAndExtensions(settings);
+    } catch (err) {
+      console.error('Failed to save Anthropic API key:', err);
+    }
+  });
+
+  // Clear Anthropic Key
+  btnClearAnthropic?.addEventListener('click', async () => {
+    try {
+      await invoke('delete_api_key', { keyName: 'apikey_anthropic' });
+      if (keyInputAnthropic) keyInputAnthropic.value = '';
+      const settings = (await invoke<Record<string, unknown>>('get_settings')) || {};
+      await loadApiKeysAndExtensions(settings);
+    } catch (err) {
+      console.error('Failed to clear Anthropic API key:', err);
+    }
+  });
+
+  // Test Ollama Connection
+  btnTestOllama?.addEventListener('click', async () => {
+    if (!hostInputOllama || !badgeStatusOllama) return;
+    const host = hostInputOllama.value.trim() || 'http://localhost:11434';
+    await invoke('set_setting', { key: 'ollama_host', value: host });
+
+    badgeStatusOllama.textContent = 'Checking…';
+    badgeStatusOllama.className = 'status-badge unchecked';
+
+    try {
+      const models = await invoke<AiModel[]>('fetch_ai_models', { provider: 'ollama' });
+      if (models && models.length >= 0) {
+        badgeStatusOllama.textContent = 'Online';
+        badgeStatusOllama.className = 'status-badge online';
+      }
+    } catch {
+      badgeStatusOllama.textContent = 'Offline';
+      badgeStatusOllama.className = 'status-badge offline';
+    }
+  });
+
+  // Refresh Models
+  btnRefreshModels?.addEventListener('click', async () => {
+    if (!btnRefreshModels) return;
+    btnRefreshModels.disabled = true;
+    const origHTML = btnRefreshModels.innerHTML;
+    btnRefreshModels.innerHTML = `<span>Fetching…</span>`;
+
+    try {
+      const models = (await invoke<AiModel[]>('fetch_ai_models', { provider: 'all' })) || [];
+      if (models.length > 0) {
+        // Update model pickers with live list
+        if (selAiDefaultModel) {
+          const currentVal = selAiDefaultModel.value;
+          selAiDefaultModel.innerHTML = '';
+          for (const m of models) {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.name} (${m.provider})`;
+            selAiDefaultModel.appendChild(opt);
+          }
+          if (models.some((m) => m.id === currentVal)) {
+            selAiDefaultModel.value = currentVal;
+          }
+        }
+        btnRefreshModels.innerHTML = `<span>Updated (${models.length}) ✓</span>`;
+      } else {
+        btnRefreshModels.innerHTML = `<span>No Models Found</span>`;
+      }
+    } catch (err) {
+      console.error('Failed to refresh AI models:', err);
+      btnRefreshModels.innerHTML = `<span>Error</span>`;
+    }
+
+    setTimeout(() => {
+      if (btnRefreshModels) {
+        btnRefreshModels.innerHTML = origHTML;
+        btnRefreshModels.disabled = false;
+      }
+    }, 2500);
+  });
+
+  // Change Default AI Model
+  selAiDefaultModel?.addEventListener('change', async () => {
+    if (!selAiDefaultModel) return;
+    await saveSetting('ai_default_model', selAiDefaultModel.value);
+    await invoke('set_extension_preference', {
+      extensionName: 'openai',
+      key: 'model',
+      value: selAiDefaultModel.value,
+    });
+    if (selExtPrefOpenaiModel) {
+      selExtPrefOpenaiModel.value = selAiDefaultModel.value;
+    }
+  });
+
+  // Extension Preferences: model
+  selExtPrefOpenaiModel?.addEventListener('change', async () => {
+    if (!selExtPrefOpenaiModel) return;
+    await invoke('set_extension_preference', {
+      extensionName: 'openai',
+      key: 'model',
+      value: selExtPrefOpenaiModel.value,
+    });
+    if (selAiDefaultModel) {
+      selAiDefaultModel.value = selExtPrefOpenaiModel.value;
+    }
+  });
+
+  // Extension Preferences: systemPrompt
+  txtExtPrefOpenaiSystemPrompt?.addEventListener('change', async () => {
+    if (!txtExtPrefOpenaiSystemPrompt) return;
+    await invoke('set_extension_preference', {
+      extensionName: 'openai',
+      key: 'systemPrompt',
+      value: txtExtPrefOpenaiSystemPrompt.value,
+    });
   });
 }
 

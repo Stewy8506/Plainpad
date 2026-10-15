@@ -525,3 +525,194 @@ body.settings-window {
   padding-top: 8px;
   width: 100%;
 }
+
+/* Extensions & AI Providers Styles */
+.api-key-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.api-key-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-key-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.key-input {
+  width: 100%;
+  padding-right: 32px !important;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.icon-btn {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.status-badge.configured,
+.status-badge.online {
+  background: rgba(81, 207, 102, 0.15);
+  color: #51cf66;
+  border: 1px solid rgba(81, 207, 102, 0.3);
+}
+
+.status-badge.missing,
+.status-badge.offline {
+  background: rgba(207, 102, 121, 0.12);
+  color: #cf6679;
+  border: 1px solid rgba(207, 102, 121, 0.25);
+}
+
+.status-badge.unchecked {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.danger-subtle {
+  background: rgba(207, 102, 121, 0.1);
+  color: #cf6679;
+  border-color: rgba(207, 102, 121, 0.25);
+}
+.danger-subtle:hover {
+  background: rgba(207, 102, 121, 0.2);
+}
+
+.extension-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.extension-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.extension-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extension-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.extension-version {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.scope-pill {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.extension-author {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.extension-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.extension-meta-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.ext-meta-label {
+  color: var(--text-muted);
+}
+
+.ext-endpoint-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  word-break: break-all;
+}
+
+.ext-preferences-container {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sub-row {
+  padding: 6px 0 !important;
+}
+
+.setting-col {
+  display: flex;
+  flex-direction: column;
+}

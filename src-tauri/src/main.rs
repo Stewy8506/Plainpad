@@ -959,6 +959,115 @@ fn fetch_and_save_rates(rates_path: &std::path::Path) -> Result<plainpad_core::c
     Ok(plainpad_core::currency::get_rates_info())
 }
 
+// ---------- Extension Runtime IPC Commands ----------
+
+#[tauri::command]
+fn store_api_key(
+    key_name: String,
+    key_value: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .store_api_key(&key_name, &key_value)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_api_keys(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Vec<plainpad_core::ApiKeyMeta>, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .list_api_keys()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_api_key(
+    key_name: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<bool, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .delete_api_key(&key_name)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn call_api(
+    api_key_name: String,
+    url: String,
+    method: String,
+    headers: String,
+    body: Option<String>,
+    approved_endpoints: Vec<String>,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<plainpad_core::CallApiResponse, String> {
+    let parsed_headers = plainpad_core::parse_headers(&headers);
+    let req = plainpad_core::CallApiRequest {
+        api_key_name,
+        url,
+        method,
+        headers: parsed_headers,
+        body,
+        approved_endpoints,
+    };
+    state
+        .lock()
+        .unwrap()
+        .store
+        .call_api(req)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_extension_preference(
+    extension_name: String,
+    key: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Option<String>, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .get_extension_preference(&extension_name, &key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_extension_preference(
+    extension_name: String,
+    key: String,
+    value: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .set_extension_preference(&extension_name, &key, &value)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fetch_ai_models(
+    provider: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Vec<plainpad_core::AiModel>, String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .fetch_ai_models(&provider)
+}
+
 // ---------- main ----------
 
 fn main() {
@@ -1265,6 +1374,13 @@ fn main() {
             get_autopaste_status,
             submit_clipboard_clip,
             open_external_url,
+            store_api_key,
+            list_api_keys,
+            delete_api_key,
+            call_api,
+            get_extension_preference,
+            set_extension_preference,
+            fetch_ai_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

@@ -94,13 +94,13 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 7: JavaScript Extension Runtime & AI Model Catalog
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Sandboxed JS runtime running `antinote-extensions-base-v0.0.1.js`, native secure `callAPI` bridge with credential store, double-colon invocation `::command(...)`, and multi-provider AI model catalog (OpenAI, Anthropic, Ollama).  
 **Depends on:** Phase 1  
 **Requirements:** REQ-23, REQ-24, REQ-25  
 **Plans:**
-- [ ] Plan 7.1: Embedded JS runtime executing `antinote-extensions-base-v0.0.1.js` with secure `callAPI` bridge
-- [ ] Plan 7.2: AI Model Catalog integration (OpenAI, Anthropic, Ollama) and `::command` editor syntax
+- [x] Plan 7.1: Embedded JS runtime executing `antinote-extensions-base-v0.0.1.js` with secure `callAPI` bridge
+- [x] Plan 7.2: AI Model Catalog integration (OpenAI, Anthropic, Ollama) and `::command` editor syntax
 
 ---
 
@@ -126,7 +126,7 @@ updated: 2026-10-13T20:14:00+05:30
 | **Phase 4** | Sentence Triggers & AutoPaste | ✅ Complete | 2/2 | 100% |
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ✅ Complete | 3/3 | 100% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ✅ Complete | 3/3 | 100% |
-| **Phase 7** | JS Extension Runtime & AI Catalog | ⬜ Not Started | 0/2 | 0% |
+| **Phase 7** | JS Extension Runtime & AI Catalog | ✅ Complete | 2/2 | 100% |
 | **Phase 8** | Window Chrome, Shaders & Export Suite | ⬜ Not Started | 0/3 | 0% |
 
 ---
@@ -141,5 +141,5 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase 4 | 2026-10-13 | 2026-10-15 | ~40m |
 | Phase 5 | 2026-10-15 | 2026-10-15 | ~45m |
 | Phase 6 | 2026-10-15 | 2026-10-15 | ~50m |
-| Phase 7 | — | — | — |
+| Phase 7 | 2026-10-15 | 2026-10-15 | ~40m |
 | Phase 8 | — | — | — |

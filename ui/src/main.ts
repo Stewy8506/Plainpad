@@ -23,6 +23,12 @@ import {
   applyInlineFormat,
   CaretNudgeController,
 } from './typography.js';
+import {
+  extensionRuntime,
+  findCommandInLine,
+  executeCommand,
+  type DetectedCommand,
+} from './extensions.js';
 
 interface TauriAPI {
   core: {
@@ -232,9 +238,92 @@ function showStatusMessage(msg: string, durationMs = 2500): void {
   }, durationMs);
 }
 
+let isExecutingExtensionCommand = false;
+
+async function executeEditorCommand(
+  detected: DetectedCommand,
+  lineStart: number,
+  lineEnd: number
+): Promise<boolean> {
+  if (isExecutingExtensionCommand) return false;
+  isExecutingExtensionCommand = true;
+
+  const statusIndicator = document.getElementById('extension-status-indicator');
+  const statusText = document.getElementById('extension-status-text');
+  if (statusIndicator) {
+    if (statusText) statusText.textContent = `Running ::${detected.commandName}…`;
+    statusIndicator.classList.remove('hidden');
+  }
+
+  try {
+    const fullNote = editor.value;
+    const currentLineText = fullNote.substring(lineStart, lineEnd);
+    const cmd = extensionRuntime.findCommand(detected.commandName);
+    const cmdType = cmd?.type || 'insert';
+
+    const result = await executeCommand(
+      detected.commandName,
+      detected.rawParams,
+      currentLineText,
+      fullNote
+    );
+
+    if (result.status === 'success') {
+      const payloadStr =
+        result.payload !== undefined && result.payload !== null
+          ? String(result.payload)
+          : '';
+
+      if (cmdType === 'replaceAll') {
+        editor.value = payloadStr;
+        editor.selectionStart = editor.selectionEnd = payloadStr.length;
+      } else if (cmdType === 'replaceLine') {
+        const before = fullNote.substring(0, lineStart);
+        const after = fullNote.substring(lineEnd);
+        editor.value = before + payloadStr + after;
+        editor.selectionStart = editor.selectionEnd = lineStart + payloadStr.length;
+      } else if (cmdType === 'openURL') {
+        if (payloadStr) {
+          invoke('open_external_url', { url: payloadStr }).catch(() => {
+            window.open(payloadStr, '_blank');
+          });
+        }
+      } else {
+        // 'insert': replace the invocation expression itself with payload
+        const absStart = lineStart + detected.startIndex;
+        const absEnd = lineStart + detected.endIndex;
+        const before = fullNote.substring(0, absStart);
+        const after = fullNote.substring(absEnd);
+        editor.value = before + payloadStr + after;
+        editor.selectionStart = editor.selectionEnd = absStart + payloadStr.length;
+      }
+
+      updateBackdrop();
+      scheduleSave();
+      scheduleAnalyze();
+      showStatusMessage(`::${detected.commandName} completed`);
+      return true;
+    } else {
+      showStatusMessage(result.message || `::${detected.commandName} failed`, 4000);
+      return false;
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    showStatusMessage(`Error executing ::${detected.commandName}: ${msg}`, 4000);
+    return false;
+  } finally {
+    isExecutingExtensionCommand = false;
+    if (statusIndicator) {
+      statusIndicator.classList.add('hidden');
+    }
+  }
+}
+
 // ---------- Init ----------
 
 async function init(): Promise<void> {
+  await extensionRuntime.init().catch(console.error);
+
   const slottedBarContainer = document.getElementById('slotted-bar');
   if (slottedBarContainer) {
     slottedBar = new SlottedNotesBottomBar(slottedBarContainer, (slotIndex) => {
@@ -1711,6 +1800,21 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
+  // Execution shortcut: Ctrl+Enter / Cmd+Enter for ::command(...) or alias
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+    const cursor = editor.selectionStart;
+    const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
+    const lineEndIdx = editor.value.indexOf('\n', cursor);
+    const lineEnd = lineEndIdx === -1 ? editor.value.length : lineEndIdx;
+    const lineText = editor.value.substring(lineStart, lineEnd);
+    const detected = findCommandInLine(lineText);
+    if (detected) {
+      e.preventDefault();
+      executeEditorCommand(detected, lineStart, lineEnd).catch(console.error);
+      return;
+    }
+  }
+
   // Auto-close brackets and quotes
   const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'" };
   if (autoBrackets && pairs[e.key]) {
@@ -1728,8 +1832,20 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     }
   }
 
-  // Tab → accept chip, trigger paste, or indent
+  // Tab → execute command, accept chip, trigger paste, or indent
   if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+    const cursor = editor.selectionStart;
+    const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
+    const lineEndIdx = editor.value.indexOf('\n', cursor);
+    const lineEnd = lineEndIdx === -1 ? editor.value.length : lineEndIdx;
+    const lineText = editor.value.substring(lineStart, lineEnd);
+    const detected = findCommandInLine(lineText);
+    if (detected) {
+      e.preventDefault();
+      executeEditorCommand(detected, lineStart, lineEnd).catch(console.error);
+      return;
+    }
+
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
     const curLine = editor.value.split('\n')[cursorLine]?.trim().toLowerCase() || '';
     const pasteAliases = (triggerConfig?.paste_triggers as string[])?.map((t: string) => t.toLowerCase()) || ['paste'];
@@ -1779,8 +1895,20 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
-  // Enter on a timer line or paste trigger line → start or stop timer / start AutoPaste
+  // Enter on a command line, timer line or paste trigger line → execute command / start or stop timer / start AutoPaste
   if (e.key === 'Enter') {
+    const cursor = editor.selectionStart;
+    const lineStart = editor.value.lastIndexOf('\n', cursor - 1) + 1;
+    const lineEndIdx = editor.value.indexOf('\n', cursor);
+    const lineEnd = lineEndIdx === -1 ? editor.value.length : lineEndIdx;
+    const lineText = editor.value.substring(lineStart, lineEnd);
+    const detected = findCommandInLine(lineText);
+    if (detected) {
+      e.preventDefault();
+      executeEditorCommand(detected, lineStart, lineEnd).catch(console.error);
+      return;
+    }
+
     const cursorLine = editor.value.substring(0, editor.selectionStart).split('\n').length - 1;
     const rawLine = editor.value.split('\n')[cursorLine]?.trim() || '';
     const line = rawLine.toLowerCase();

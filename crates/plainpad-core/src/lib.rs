@@ -7,6 +7,7 @@
 pub mod clipboard;
 pub mod currency;
 pub mod export;
+pub mod extensions;
 pub mod intent;
 pub mod mathwrap;
 pub mod model;
@@ -19,6 +20,13 @@ pub mod vim;
 pub mod typography;
 
 pub use clipboard::{AutoPasteEngine, ClipboardReader, MockClipboardReader, SystemClipboardReader};
+pub use extensions::{
+    call_api, fetch_ai_models_for_provider, fetch_anthropic_models, fetch_ollama_models,
+    fetch_openai_models, filter_content, get_extension_preference, mask_api_key, normalize_key_name,
+    parse_anthropic_models_response, parse_headers, parse_ollama_models_response,
+    parse_openai_models_response, set_extension_preference, substitute_api_key, AiModel, ApiKeyMeta,
+    CallApiRequest, CallApiResponse, CredentialStore, DataScope, EndpointSecurity, SecurityError,
+};
 pub use model::{
     now_iso, title_from_text, Antilink, Attachment, ChecklistItem, Note, NoteMeta, SyncState,
 };

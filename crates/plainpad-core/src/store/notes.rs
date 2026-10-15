@@ -412,4 +412,55 @@ impl SqliteStore {
     pub fn set_geometry(&self, geo: [i32; 4]) -> Result<(), StoreError> {
         self.set_setting("geometry", serde_json::json!(geo))
     }
+
+    /// Stores an API key in the credential store (`app_state`).
+    pub fn store_api_key(&self, key_name: &str, key_value: &str) -> Result<(), StoreError> {
+        self.with_conn(|conn| crate::extensions::CredentialStore::store_api_key(conn, key_name, key_value))
+    }
+
+    /// Retrieves an API key from the credential store (`app_state`).
+    pub fn get_api_key(&self, key_name: &str) -> Result<Option<String>, StoreError> {
+        self.with_conn(|conn| crate::extensions::CredentialStore::get_api_key(conn, key_name))
+    }
+
+    /// Lists configured API keys with masked previews.
+    pub fn list_api_keys(&self) -> Result<Vec<crate::extensions::ApiKeyMeta>, StoreError> {
+        self.with_conn(|conn| crate::extensions::CredentialStore::list_api_keys(conn))
+    }
+
+    /// Deletes an API key from `app_state`.
+    pub fn delete_api_key(&self, key_name: &str) -> Result<bool, StoreError> {
+        self.with_conn(|conn| crate::extensions::CredentialStore::delete_api_key(conn, key_name))
+    }
+
+    /// Executes a native API call for an extension with validation and key substitution.
+    pub fn call_api(&self, req: crate::extensions::CallApiRequest) -> Result<crate::extensions::CallApiResponse, StoreError> {
+        self.with_conn(|conn| Ok(crate::extensions::call_api(conn, req)))
+    }
+
+    /// Retrieves an extension preference from `app_state`.
+    pub fn get_extension_preference(
+        &self,
+        extension_name: &str,
+        key: &str,
+    ) -> Result<Option<String>, StoreError> {
+        self.with_conn(|conn| crate::extensions::get_extension_preference(conn, extension_name, key))
+    }
+
+    /// Sets an extension preference in `app_state`.
+    pub fn set_extension_preference(
+        &self,
+        extension_name: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<(), StoreError> {
+        self.with_conn(|conn| crate::extensions::set_extension_preference(conn, extension_name, key, value))
+    }
+
+    /// Fetches AI models for a specified provider from online APIs or local Ollama.
+    pub fn fetch_ai_models(&self, provider: &str) -> Result<Vec<crate::extensions::AiModel>, String> {
+        self.with_conn(|conn| Ok(crate::extensions::fetch_ai_models_for_provider(conn, provider, None)))
+            .map_err(|e| e.to_string())
+            .and_then(|r| r)
+    }
 }

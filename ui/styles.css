@@ -1599,3 +1599,42 @@ body.code-mode #editor {
 .vim-status-coords {
   color: var(--text-muted, rgba(255, 255, 255, 0.6));
 }
+
+.extension-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-cyan, #22b8cf);
+  background: rgba(34, 184, 207, 0.12);
+  border: 1px solid rgba(34, 184, 207, 0.28);
+  padding: 2px 8px;
+  border-radius: 4px;
+  user-select: none;
+  margin-right: 6px;
+  animation: extPulseGlow 1.8s infinite ease-in-out;
+}
+
+.extension-status-indicator.hidden {
+  display: none !important;
+}
+
+.ext-spinner {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--accent-cyan, #22b8cf);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: extSpin 0.75s linear infinite;
+}
+
+@keyframes extSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes extPulseGlow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.45; }
+}

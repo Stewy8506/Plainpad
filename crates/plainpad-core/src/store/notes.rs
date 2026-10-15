@@ -170,6 +170,9 @@ impl SqliteStore {
             Ok(())
         })?;
 
+        // Synchronize relational child entities (checklist items and antilinks)
+        self.sync_relational_entities(id, content)?;
+
         let mut updated = note;
         updated.content = content.to_string();
         updated.last_modified = now;

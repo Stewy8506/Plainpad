@@ -9,6 +9,7 @@ pub use file::{content_hash, FileStore, FileStoreMeta, FileStoreNote};
 pub use notes::{
     default_content_for_slot, deity_for_slot, GREEK_DEITIES, HERMES_DEFAULT_CONTENT,
 };
+pub use relational::{extract_antilinks, extract_checklist_items, shorten_url};
 pub use schema::{get_user_version, run_migrations, set_user_version, CURRENT_SCHEMA_VERSION};
 pub use snapshot::SnapshotMeta;
 

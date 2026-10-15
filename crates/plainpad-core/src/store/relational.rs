@@ -174,6 +174,23 @@ impl SqliteStore {
         })
     }
 
+    /// Replaces all antilink records for a note in an atomic transaction (alias for `save_antilinks`).
+    pub fn replace_antilinks(&self, note_id: &str, links: &[Antilink]) -> Result<(), StoreError> {
+        self.save_antilinks(note_id, links)
+    }
+
+    /// Synchronizes relational child entities (`checklist_items` and `antilinks`)
+    /// extracted from note text content.
+    pub fn sync_relational_entities(&self, note_id: &str, content: &str) -> Result<(), StoreError> {
+        let items = extract_checklist_items(note_id, content);
+        self.replace_checklist_items(note_id, &items)?;
+
+        let links = extract_antilinks(note_id, content);
+        self.replace_antilinks(note_id, &links)?;
+
+        Ok(())
+    }
+
     // -------------------------------------------------------------------------
     // Attachments
     // -------------------------------------------------------------------------
@@ -309,4 +326,121 @@ impl SqliteStore {
             Ok(())
         })
     }
+}
+
+// -------------------------------------------------------------------------
+// Extraction Helpers
+// -------------------------------------------------------------------------
+
+/// Extracts all markdown checklist items from note content.
+pub fn extract_checklist_items(note_id: &str, content: &str) -> Vec<ChecklistItem> {
+    let mut items = Vec::new();
+    let mut offset = 0;
+    let mut index = 0;
+
+    for (line_idx, line) in content.split('\n').enumerate() {
+        let trimmed_start = line.trim_start();
+        let indent_len = line.len() - trimmed_start.len();
+
+        let mut matched = None;
+        if trimmed_start.starts_with("[ ] ") {
+            matched = Some((false, &trimmed_start[4..], indent_len));
+        } else if trimmed_start.starts_with("[x] ") || trimmed_start.starts_with("[X] ") {
+            matched = Some((true, &trimmed_start[4..], indent_len));
+        } else if trimmed_start.starts_with("- [ ] ") || trimmed_start.starts_with("* [ ] ") || trimmed_start.starts_with("+ [ ] ") {
+            matched = Some((false, &trimmed_start[6..], indent_len + 2));
+        } else if trimmed_start.starts_with("- [x] ") || trimmed_start.starts_with("- [X] ")
+            || trimmed_start.starts_with("* [x] ") || trimmed_start.starts_with("* [X] ")
+            || trimmed_start.starts_with("+ [x] ") || trimmed_start.starts_with("+ [X] ") {
+            matched = Some((true, &trimmed_start[6..], indent_len + 2));
+        }
+
+        if let Some((checked, item_content, _pos)) = matched {
+            items.push(ChecklistItem {
+                id: uuid::Uuid::new_v4().to_string(),
+                note_id: note_id.to_string(),
+                content: item_content.to_string(),
+                checked,
+                index,
+                vertical_position: line_idx as f64,
+                responsibility_range_location: offset as i32,
+                responsibility_range_length: line.len() as i32,
+                is_hidden: false,
+            });
+            index += 1;
+        }
+
+        offset += line.len() + 1;
+    }
+
+    items
+}
+
+/// Shortens a URL to its compact domain representation (e.g. "github.com/...").
+pub fn shorten_url(url: &str) -> String {
+    let without_proto = if let Some(stripped) = url.strip_prefix("https://") {
+        stripped
+    } else if let Some(stripped) = url.strip_prefix("http://") {
+        stripped
+    } else {
+        url
+    };
+
+    let without_www = if let Some(stripped) = without_proto.strip_prefix("www.") {
+        stripped
+    } else {
+        without_proto
+    };
+
+    if let Some((host, path_and_query)) = without_www.split_once('/') {
+        if !path_and_query.is_empty() && path_and_query != "/" {
+            format!("{host}/...")
+        } else {
+            host.to_string()
+        }
+    } else {
+        without_www.to_string()
+    }
+}
+
+/// Extracts all URL antilinks from note content.
+pub fn extract_antilinks(note_id: &str, content: &str) -> Vec<Antilink> {
+    let mut links = Vec::new();
+    let mut offset = 0;
+
+    for line in content.split('\n') {
+        let mut search_start = 0;
+        while let Some(rel_idx) = line[search_start..].find("http://").or_else(|| line[search_start..].find("https://")) {
+            let actual_start = search_start + rel_idx;
+            let slice = &line[actual_start..];
+            let end_idx = slice
+                .find(|c: char| c.is_whitespace() || c == '<' || c == '>' || c == '"' || c == '\'' || c == '`')
+                .unwrap_or(slice.len());
+            let mut raw_url = &slice[..end_idx];
+
+            while raw_url.ends_with('.') || raw_url.ends_with(',') || raw_url.ends_with(';')
+                || raw_url.ends_with(':') || raw_url.ends_with('!') || raw_url.ends_with('?')
+                || raw_url.ends_with(')') || raw_url.ends_with(']') {
+                raw_url = &raw_url[..raw_url.len() - 1];
+            }
+
+            if !raw_url.is_empty() {
+                let shortened = shorten_url(raw_url);
+                links.push(Antilink {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    note_id: note_id.to_string(),
+                    full_url: raw_url.to_string(),
+                    shortened_url: shortened,
+                    current_range_location: (offset + actual_start) as i32,
+                    current_range_length: raw_url.len() as i32,
+                });
+            }
+
+            search_start = actual_start + end_idx.max(1);
+        }
+
+        offset += line.len() + 1;
+    }
+
+    links
 }

@@ -77,6 +77,17 @@ const chkGlobalPlain = document.getElementById('setting-global-plain') as HTMLIn
 const selTabWidth = document.getElementById('setting-tab-width') as HTMLSelectElement;
 const chkAutoBrackets = document.getElementById('setting-auto-brackets') as HTMLInputElement;
 const chkListCheckboxes = document.getElementById('setting-list-checkboxes') as HTMLInputElement;
+const chkInlineBullets = document.getElementById('setting-inline-bullets') as HTMLInputElement;
+const chkInlineNumbers = document.getElementById('setting-inline-numbers') as HTMLInputElement;
+const chkDisableLinkShortening = document.getElementById('setting-disable-link-shortening') as HTMLInputElement;
+const chkDisableLinkHighlighting = document.getElementById('setting-disable-link-highlighting') as HTMLInputElement;
+const chkActivateVimMode = document.getElementById('setting-activate-vim-mode') as HTMLInputElement;
+const rngCaretNudge = document.getElementById('setting-caret-nudge') as HTMLInputElement;
+const badgeCaretNudge = document.getElementById('caret-nudge-val') as HTMLElement;
+const rngCaretNudgeList = document.getElementById('setting-caret-nudge-list') as HTMLInputElement;
+const badgeCaretNudgeList = document.getElementById('caret-nudge-list-val') as HTMLElement;
+const chkForceRTL = document.getElementById('setting-force-rtl') as HTMLInputElement;
+const chkReadOnly = document.getElementById('setting-read-only') as HTMLInputElement;
 
 // Keywords & Triggers
 const chkDisableAllKeywords = document.getElementById('setting-disable-all-keywords') as HTMLInputElement;
@@ -220,8 +231,50 @@ async function loadSettings(): Promise<void> {
   if (chkAutoBrackets && settings.auto_brackets !== undefined) {
     chkAutoBrackets.checked = !!settings.auto_brackets;
   }
-  if (chkListCheckboxes && settings.list_checkboxes !== undefined) {
-    chkListCheckboxes.checked = !!settings.list_checkboxes;
+  if (chkListCheckboxes) {
+    if (settings.inlineChecklistCheckboxesEnabled !== undefined) {
+      chkListCheckboxes.checked = !!settings.inlineChecklistCheckboxesEnabled;
+    } else if (settings.list_checkboxes !== undefined) {
+      chkListCheckboxes.checked = !!settings.list_checkboxes;
+    }
+  }
+  if (chkInlineBullets && settings.inlineChecklistBulletsEnabled !== undefined) {
+    chkInlineBullets.checked = !!settings.inlineChecklistBulletsEnabled;
+  }
+  if (chkInlineNumbers && settings.inlineNumberedListsEnabled !== undefined) {
+    chkInlineNumbers.checked = !!settings.inlineNumberedListsEnabled;
+  }
+  if (chkDisableLinkShortening && settings.disableLinkShortening !== undefined) {
+    chkDisableLinkShortening.checked = !!settings.disableLinkShortening;
+  }
+  if (chkDisableLinkHighlighting && settings.disableLinkHighlighting !== undefined) {
+    chkDisableLinkHighlighting.checked = !!settings.disableLinkHighlighting;
+  }
+  if (chkActivateVimMode && settings.activateVimMode !== undefined) {
+    chkActivateVimMode.checked = !!settings.activateVimMode;
+  }
+  if (rngCaretNudge) {
+    const val = settings._caretVerticalNudgeRaw !== undefined
+      ? Number(settings._caretVerticalNudgeRaw)
+      : (settings.caret_vertical_nudge !== undefined ? Number(settings.caret_vertical_nudge) : 0);
+    rngCaretNudge.value = String(val);
+    if (badgeCaretNudge) badgeCaretNudge.textContent = `${val}px`;
+  }
+  if (rngCaretNudgeList) {
+    const val = settings._caretVerticalNudgeForListsRaw !== undefined
+      ? Number(settings._caretVerticalNudgeForListsRaw)
+      : (settings.caret_vertical_nudge_list !== undefined ? Number(settings.caret_vertical_nudge_list) : 0);
+    rngCaretNudgeList.value = String(val);
+    if (badgeCaretNudgeList) badgeCaretNudgeList.textContent = `${val}px`;
+  }
+  if (chkForceRTL) {
+    const isRtl = settings.forceRTL !== undefined
+      ? !!settings.forceRTL
+      : (settings._forceRTLStorage !== undefined ? !!settings._forceRTLStorage : false);
+    chkForceRTL.checked = isRtl;
+  }
+  if (chkReadOnly && settings.read_only !== undefined) {
+    chkReadOnly.checked = !!settings.read_only;
   }
 
   // Keywords & Math
@@ -433,7 +486,34 @@ function wireEvents(): void {
   chkGlobalPlain?.addEventListener('change', () => saveSetting('global_plain', chkGlobalPlain.checked));
   selTabWidth?.addEventListener('change', () => saveSetting('tab_width', selTabWidth.value));
   chkAutoBrackets?.addEventListener('change', () => saveSetting('auto_brackets', chkAutoBrackets.checked));
-  chkListCheckboxes?.addEventListener('change', () => saveSetting('list_checkboxes', chkListCheckboxes.checked));
+  chkListCheckboxes?.addEventListener('change', () => {
+    saveSetting('inlineChecklistCheckboxesEnabled', chkListCheckboxes.checked);
+    saveSetting('list_checkboxes', chkListCheckboxes.checked);
+  });
+  chkInlineBullets?.addEventListener('change', () => saveSetting('inlineChecklistBulletsEnabled', chkInlineBullets.checked));
+  chkInlineNumbers?.addEventListener('change', () => saveSetting('inlineNumberedListsEnabled', chkInlineNumbers.checked));
+  chkDisableLinkShortening?.addEventListener('change', () => saveSetting('disableLinkShortening', chkDisableLinkShortening.checked));
+  chkDisableLinkHighlighting?.addEventListener('change', () => saveSetting('disableLinkHighlighting', chkDisableLinkHighlighting.checked));
+  chkActivateVimMode?.addEventListener('change', () => saveSetting('activateVimMode', chkActivateVimMode.checked));
+  rngCaretNudge?.addEventListener('input', () => {
+    const val = parseFloat(rngCaretNudge.value) || 0;
+    if (badgeCaretNudge) badgeCaretNudge.textContent = `${val}px`;
+    saveSetting('_caretVerticalNudgeRaw', val);
+    saveSetting('caret_vertical_nudge', val);
+  });
+  rngCaretNudgeList?.addEventListener('input', () => {
+    const val = parseFloat(rngCaretNudgeList.value) || 0;
+    if (badgeCaretNudgeList) badgeCaretNudgeList.textContent = `${val}px`;
+    saveSetting('_caretVerticalNudgeForListsRaw', val);
+    saveSetting('caret_vertical_nudge_list', val);
+  });
+  chkForceRTL?.addEventListener('change', () => {
+    saveSetting('forceRTL', chkForceRTL.checked);
+    saveSetting('_forceRTLStorage', chkForceRTL.checked);
+  });
+  chkReadOnly?.addEventListener('change', () => {
+    saveSetting('read_only', chkReadOnly.checked);
+  });
 
   // Trigger Controls & Aliases
   chkDisableAllKeywords?.addEventListener('change', () => saveTriggerSettings());

@@ -16,6 +16,7 @@
       <button id="btn-next" class="chrome-btn" title="Next note (Ctrl+→)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button>
       <button id="btn-pin" class="chrome-btn" title="Pin note to top of list"><svg class="icon-pin" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5l1.9 4.3 4.6.4-3.5 3.1 1 4.6L8 11.5l-4 2.4 1-4.6L1.5 6.2l4.6-.4L8 1.5z"/></svg></button>
       <button id="btn-plain" class="chrome-btn" title="Plain mode (Ctrl+P)"><svg class="icon-plain" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle class="plain-dot" cx="8" cy="8" r="2.5" fill="none"/></svg></button>
+      <span id="readonly-badge" class="readonly-badge hidden" title="Read-Only Mode Active (Ctrl+Shift+R to unlock)"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V4.5a3 3 0 0 1 6 0V7"/></svg>Locked</span>
     </div>
     <div class="bar-spacer" data-tauri-drag-region></div>
     <div class="chrome-group window-controls">
@@ -55,6 +56,7 @@
     <button id="btn-export" class="chrome-btn" title="Export (Ctrl+Shift+E)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v9M4.5 6L8 2.5 11.5 6M2.5 11.5v2a1 1 0 001 1h9a1 1 0 001-1v-2"/></svg></button>
     <div id="slotted-bar" class="slotted-bar"></div>
     <div class="bar-spacer"></div>
+    <span id="vim-status-indicator" class="vim-status-indicator hidden"></span>
     <span id="sync-status" class="sync-status"></span>
     <button id="btn-settings" class="chrome-btn" title="Settings"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M13.5 8a5.5 5.5 0 00-.1-.9l1.4-1.1-1.3-2.3-1.7.6a5.5 5.5 0 00-1.5-.9L10 1.7H7.4l-.3 1.7a5.5 5.5 0 00-1.5.9l-1.7-.6-1.3 2.3 1.4 1.1A5.5 5.5 0 003.9 8a5.5 5.5 0 00.1.9l-1.4 1.1 1.3 2.3 1.7-.6a5.5 5.5 0 001.5.9l.3 1.7h2.6l.3-1.7a5.5 5.5 0 001.5-.9l1.7.6 1.3-2.3-1.4-1.1c.1-.3.1-.6.1-.9z"/></svg></button>
   </div>

@@ -396,8 +396,11 @@ pub fn analyze_with_config(text: &str, plain: bool, config: &TriggerConfig) -> A
         }
 
         // Checklists: explicit prefix or todo phrase.
-        if t.starts_with("[ ] ") || t.starts_with("[x] ") || t.starts_with("[X] ")
-            || t.starts_with("- [ ] ") || t.starts_with("- [x] ") || t.starts_with("- [X] ") {
+        let is_checkbox_marker = t.starts_with("[ ] ") || t.starts_with("[x] ") || t.starts_with("[X] ")
+            || t.starts_with("- [ ] ") || t.starts_with("- [x] ") || t.starts_with("- [X] ")
+            || t.starts_with("* [ ] ") || t.starts_with("* [x] ") || t.starts_with("* [X] ")
+            || t.starts_with("+ [ ] ") || t.starts_with("+ [x] ") || t.starts_with("+ [X] ");
+        if is_checkbox_marker {
             annotations.push(Annotation {
                 line: i, kind: "checklist", confidence: 1.0, value: String::new(), chip: String::new(),
                 why: "line starts with a checkbox marker".into(),
@@ -908,6 +911,13 @@ mod tests {
         let c = a.annotations.iter().find(|x| x.chip.contains("Tab")).expect("chip");
         assert_eq!(c.kind, "checklist");
         assert!(c.confidence < 0.85, "medium confidence chip");
+
+        let a = analyze("- [ ] buy milk\n* [x] done chore\n[ ] bracket task", false);
+        let checklist_annos: Vec<_> = a.annotations.iter().filter(|x| x.kind == "checklist").collect();
+        assert_eq!(checklist_annos.len(), 3);
+        assert_eq!(checklist_annos[0].line, 0);
+        assert_eq!(checklist_annos[1].line, 1);
+        assert_eq!(checklist_annos[2].line, 2);
     }
 
     #[test]

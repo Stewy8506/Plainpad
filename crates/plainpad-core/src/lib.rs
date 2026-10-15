@@ -15,6 +15,8 @@ pub mod sync;
 pub mod timers;
 pub mod trigger_config;
 pub mod units;
+pub mod vim;
+pub mod typography;
 
 pub use clipboard::{AutoPasteEngine, ClipboardReader, MockClipboardReader, SystemClipboardReader};
 pub use model::{

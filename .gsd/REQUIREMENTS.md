@@ -32,11 +32,11 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-15** | **Timer & Pomodoro Parsing**: Parse `timer` (stopwatch), `timer 5` (countdown), `timer 3:30`, `timer pomo` (25m/5m), `timer 57 11`, and controls (`timer p`, `timer r`, `timer s`). | SPEC §6.1 | 5 | Complete |
 | **REQ-16** | **Timer UI & Circular Visuals**: Animated circular progress pill (`circleDiameter`, `circleSpacing`), remaining time display, and work/break phase indicators. | SPEC §6.2 | 5 | Complete |
 | **REQ-17** | **Audio Alerts & Modal Overlays**: Shipped audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`) and optional full-screen Pomodoro alert overlay. | SPEC §6.2 | 5 | Complete |
-| **REQ-18** | **Interactive Inline Checkboxes**: Render `- [ ]` and `- [x]` as clickable checkboxes with bidirectional plaintext synchronization. | SPEC §7 | 6 | Pending |
-| **REQ-19** | **List Continuation & Formatting**: Auto-completion for bullet lists (`- `, `* `) and numbered lists (`1. `) on Enter, terminating on blank Enter. | SPEC §7 | 6 | Pending |
-| **REQ-20** | **Smart Antilinks**: URL auto-detection with compact domain pill display while maintaining underlying destination URL and opt-out skip list. | SPEC §7 | 6 | Pending |
-| **REQ-21** | **Rounded Code Blocks**: Fenced code block rendering with rounded corner backgrounds, syntax highlighting, and "Copy Code" action button. | SPEC §7 | 6 | Pending |
-| **REQ-22** | **Modal Vim Mode**: Normal, Insert, Visual, and Visual Line modes with standard motions (`h,j,k,l,w,b,e,0,$,gg,G`) and actions (`d,y,p,u,x,c,r,i,a,o,O`). | SPEC §7 | 6 | Pending |
+| **REQ-18** | **Interactive Inline Checkboxes**: Render `- [ ]` and `- [x]` as clickable checkboxes with bidirectional plaintext synchronization. | SPEC §7 | 6 | Complete |
+| **REQ-19** | **List Continuation & Formatting**: Auto-completion for bullet lists (`- `, `* `) and numbered lists (`1. `) on Enter, terminating on blank Enter. | SPEC §7 | 6 | Complete |
+| **REQ-20** | **Smart Antilinks**: URL auto-detection with compact domain pill display while maintaining underlying destination URL and opt-out skip list. | SPEC §7 | 6 | Complete |
+| **REQ-21** | **Rounded Code Blocks**: Fenced code block rendering with rounded corner backgrounds, syntax highlighting, and "Copy Code" action button. | SPEC §7 | 6 | Complete |
+| **REQ-22** | **Modal Vim Mode**: Normal, Insert, Visual, and Visual Line modes with standard motions (`h,j,k,l,w,b,e,0,$,gg,G`) and actions (`d,y,p,u,x,c,r,i,a,o,O`). | SPEC §7 | 6 | Complete |
 | **REQ-23** | **JavaScript Extension Runtime**: Sandboxed JS engine executing `antinote-extensions-base-v0.0.1.js` classes (`Extension`, `Command`, `Preference`, `ReturnObject`). | SPEC §8.1 | 7 | Pending |
 | **REQ-24** | **Secure Native API Bridge**: `callAPI` function injecting credentials from secure storage and scoping text access (`none`, `line`, `full`). | SPEC §8.1 | 7 | Pending |
 | **REQ-25** | **AI Model Catalog & Command Syntax**: Invocation syntax `::commandName(...)` and catalog support for OpenAI, Anthropic, and local Ollama (`localhost:11434`). | SPEC §8.2 | 7 | Pending |
@@ -68,6 +68,6 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | REQ-08 .. REQ-11 | Phase 3 | `crates/plainpad-core/src/mathwrap.rs`, `currency.rs` | Complete |
 | REQ-12 .. REQ-14 | Phase 4 | `crates/plainpad-core/src/intent.rs`, `ui/src/editor.ts` | Complete |
 | REQ-15 .. REQ-17 | Phase 5 | `crates/plainpad-core/src/timers.rs`, `ui/src/timer.ts` | Complete |
-| REQ-18 .. REQ-22 | Phase 6 | `ui/src/editor.ts`, `ui/src/vim.ts` | Planned |
+| REQ-18 .. REQ-22 | Phase 6 | `ui/src/editor.ts`, `ui/src/vim.ts` | Complete |
 | REQ-23 .. REQ-25 | Phase 7 | `crates/plainpad-core/src/extensions.rs`, `ui/src/extensions.ts` | Planned |
 | REQ-26 .. REQ-30 | Phase 8 | `ui/src/shaders.ts`, `export.rs`, `src-tauri/src/main.rs` | Planned |

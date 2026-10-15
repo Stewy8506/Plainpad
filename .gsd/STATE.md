@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-15T12:15:00+05:30
+updated: 2026-10-15T13:40:00+05:30
 ---
 
 # Project State
@@ -7,33 +7,32 @@ updated: 2026-10-15T12:15:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 5 - Timer, Stopwatch & Pomodoro Subsystem  
+**Phase:** 6 - Rich Editor Capabilities & Modal Vim Mode  
 **Status:** complete & verified  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1, 2, 3, 4, 5 complete: 13/13 plans; Phase 6 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-17 Complete: 17/30)  
-**Phase 5 Verification:** `.gsd/phases/5/VERIFICATION.md` (Status: PASS, 16/16 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-6 complete: 16/16 plans; Phase 7 next)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-22 Complete: 22/30)  
+**Phase 6 Verification:** `.gsd/phases/6/VERIFICATION.md` (Status: PASS, 15/15 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and verification of **Phase 5: Timer, Stopwatch & Pomodoro Subsystem**:
-  - `01-PLAN.md`: Implemented timer phrase parser (`timer` stopwatch counting up from 00:00, `timer 5` countdown, `timer 3:30`, `timer pomo` 25m/5m, `timer 57 11`, `timer p`, `timer r`, `timer s`), `TimerEngine` tick loop, Pomodoro state transitions (work -> break -> work with cycle count), persistence across window close/restart (`state/timers.json`), and Tauri IPC endpoints.
-  - `02-PLAN.md`: Implemented interactive Timer Pill UI (`TimerView`) with circular SVG progress ring (`circleDiameter = 28px`), tabular time digits, phase badge, hover controls (pause/resume, restart, stop), audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`), and full-screen modal alert.
-  - `03-PLAN.md` (Gap Closure): Wired immediate real-time event broadcasting on pause/resume/stop, instant UI clearance on `timer s` in editor or stop chip click, and integrated `pauseTheTimerIfAppClosed` with window hide/close/tray lifecycle events.
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 16 empirical verification checks with 125 passing tests in `plainpad-core`.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-15 through REQ-17 Complete.
+- Completed full execution and independent verification of **Phase 6: Rich Editor Capabilities & Modal Vim Mode**:
+  - `01-PLAN.md`: Interactive inline checkboxes (`- [ ]`, `- [x]`, `* [ ]`, `+ [ ]`, `[ ]`, `[x]`), list auto-continuation (`- `, `* `, `1. `) and blank Enter termination, Antilink URL shortening (`github.com/...`) with full URL preservation, rounded code blocks with "Copy Code" button, and SQLite relational synchronization (`checklist_items` and `antilinks` tables).
+  - `02-PLAN.md`: Full modal Vim Mode engine (`NORMAL`, `INSERT`, `VISUAL`, `VISUAL_LINE`), standard motions (`h,j,k,l,w,b,e,0,$,gg,G`), action operators (`d,y,p,P,u,x,c,r,i,a,o,O`), debounced motion handler (`debounceTimerForVimMotions`), pulsing block caret, `#vim-status-indicator`, and `activateVimMode` setting toggle.
+  - `03-PLAN.md`: Heading cycle (`Ctrl+H`), inline markdown formatting (`Ctrl+B`, `Ctrl+I`, `Ctrl+Shift+X`, `Ctrl+U`), read-only mode (`Ctrl+Shift+R`), sub-pixel vertical caret baseline nudging (`_caretVerticalNudgeRaw`, `_caretVerticalNudgeForListsRaw`) with dynamic list detection, and Right-To-Left (`dir="rtl"`) text layout with mirrored overlay coordinates (`Ctrl+Shift+L`).
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 15 empirical checks across 138 unit & integration tests, TypeScript typechecking, and headless browser-environment checks.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-18 through REQ-22 Complete.
 
 ## Next Steps
 
-1. Commit Phase 5 batch changes to git (`feat(phase-5): implement timer, stopwatch, and pomodoro subsystem`).
-2. Plan Phase 6: Rich Editor Capabilities & Modal Vim Mode (`/plan 6`).
-   - Interactive checkboxes (`- [ ]`, `- [x]`)
-   - List continuation (`- `, `1. `) on Enter
-   - Compact Antilink pills
-   - Rounded syntax-highlighted code blocks with Copy button
-   - Full Modal Vim Mode engine (`Normal`, `Insert`, `Visual`, `Visual Line`)
-3. Execute Phase 6 plans.
-4. Verify Phase 6 deliverables (REQ-18 through REQ-22).
-5. Batch commit Phase 6.
+1. Batch commit Phase 6 to git: `feat(phase-6): implement rich editor capabilities and modal vim mode`.
+2. Plan Phase 7: JavaScript Extension Runtime & AI Model Catalog (`/plan 7`).
+   - Embedded JS engine running `antinote-extensions-base-v0.0.1.js`
+   - Secure native `callAPI` bridge with credential store
+   - Double-colon command syntax `::command(...)`
+   - Multi-provider AI model catalog (OpenAI, Anthropic, local Ollama)
+3. Execute Phase 7 plans.
+4. Verify Phase 7 deliverables (REQ-23 through REQ-25).
+5. Batch commit Phase 7.
 
 ## Active Decisions
 

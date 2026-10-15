@@ -72,6 +72,11 @@
   --kinetic-exit-blur:     16px;
   --kinetic-exit-y:        -14px;
   --kinetic-exit-ease:     cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Sub-pixel Caret Vertical Baseline Nudge */
+  --caret-vertical-nudge:              0px;
+  --caret-vertical-nudge-list:         0px;
+  --caret-vertical-nudge-applied-list: 0px;
 }
 
 /* Light theme */
@@ -398,6 +403,9 @@ body.ctrl-held #bottom-bar {
   flex: 1;
   position: relative;
   overflow: hidden;
+  --caret-vertical-nudge: 0px;
+  --caret-vertical-nudge-list: 0px;
+  --caret-vertical-nudge-applied-list: 0px;
 }
 
 #editor-backdrop {
@@ -405,7 +413,9 @@ body.ctrl-held #bottom-bar {
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: var(--pad-y) var(--pad-x);
+  padding-top: calc(var(--pad-y) + var(--caret-vertical-nudge, 0px) + var(--caret-vertical-nudge-applied-list, 0px));
+  padding-bottom: var(--pad-y);
+  padding-left: var(--pad-x);
   padding-right: 120px;
   font-family: var(--font-mono);
   font-size: var(--font-size);
@@ -425,7 +435,9 @@ body.ctrl-held #bottom-bar {
   inset: 0;
   width: 100%;
   height: 100%;
-  padding: var(--pad-y) var(--pad-x);
+  padding-top: calc(var(--pad-y) + var(--caret-vertical-nudge, 0px) + var(--caret-vertical-nudge-applied-list, 0px));
+  padding-bottom: var(--pad-y);
+  padding-left: var(--pad-x);
   padding-right: 120px; /* leave room for right-aligned results */
   background: transparent;
   border: none;
@@ -447,6 +459,56 @@ body.ctrl-held #bottom-bar {
   /* Thin scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--accent-coral-dim) transparent;
+}
+
+#editor[readonly] {
+  cursor: default;
+}
+
+body.readonly-mode #editor {
+  caret-color: transparent;
+}
+
+.readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-coral);
+  background: rgba(255, 107, 94, 0.12);
+  border: 1px solid rgba(255, 107, 94, 0.25);
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  user-select: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.readonly-badge.hidden {
+  display: none !important;
+}
+
+/* RTL Layout Mode */
+[dir="rtl"] #editor,
+[dir="rtl"] #editor-backdrop,
+[dir="rtl"] #editor-mirror,
+#editor[dir="rtl"],
+#editor-backdrop[dir="rtl"],
+#editor-mirror[dir="rtl"],
+body.rtl-mode #editor,
+body.rtl-mode #editor-backdrop,
+body.rtl-mode #editor-mirror {
+  direction: rtl;
+  text-align: right;
+  padding-right: var(--pad-x);
+  padding-left: 120px;
+}
+
+[dir="rtl"] #editor::placeholder,
+body.rtl-mode #editor::placeholder {
+  text-align: right;
+  direction: rtl;
 }
 
 #editor::placeholder {
@@ -479,7 +541,9 @@ body.ctrl-held #bottom-bar {
   top: 0;
   left: 0;
   width: 100%;
-  padding: var(--pad-y) var(--pad-x);
+  padding-top: calc(var(--pad-y) + var(--caret-vertical-nudge, 0px) + var(--caret-vertical-nudge-applied-list, 0px));
+  padding-bottom: var(--pad-y);
+  padding-left: var(--pad-x);
   padding-right: 120px;
   font-family: var(--font-mono);
   font-size: var(--font-size);
@@ -762,27 +826,148 @@ body.ctrl-held #bottom-bar {
 /* Checkbox squares rendered in overlay */
 .anno-checkbox {
   position: absolute;
-  left: calc(var(--pad-x) - 2px);
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--text-muted);
-  border-radius: 3px;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  background: transparent;
   cursor: pointer;
   pointer-events: auto;
-  transition: all var(--transition);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  z-index: 10;
+}
+.anno-checkbox:hover {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
 }
 .anno-checkbox.checked {
-  background: var(--text-secondary);
-  border-color: var(--text-secondary);
+  background: #0A84FF;
+  border-color: #0A84FF;
 }
-.anno-checkbox.checked::after {
-  content: '✓';
-  color: var(--bg-card);
+.anno-checkbox.checked svg {
+  stroke: #ffffff;
+  stroke-width: 2.2;
+}
+
+/* Antilink smart domain pills */
+.antilink-pill {
+  position: absolute;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: rgba(10, 132, 255, 0.14);
+  border: 1px solid rgba(10, 132, 255, 0.32);
+  color: #5ac8fa;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 10;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.antilink-pill:hover {
+  background: rgba(10, 132, 255, 0.26);
+  border-color: rgba(10, 132, 255, 0.58);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.antilink-icon {
+  display: flex;
+  align-items: center;
+  opacity: 0.85;
+}
+.antilink-label {
+  line-height: 1;
+}
+
+/* Rounded code blocks and header controls */
+.rounded-code-block {
+  position: absolute;
+  left: calc(var(--pad-x) - 8px);
+  right: calc(var(--pad-x) - 8px);
+  border-radius: 8px;
+  background: rgba(20, 24, 32, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.code-block-header {
+  position: absolute;
+  right: calc(var(--pad-x) + 4px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 12;
+  pointer-events: auto;
+  margin-top: 4px;
+}
+
+.code-block-lang {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.code-copy-btn {
   font-size: 11px;
-  font-weight: 700;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  user-select: none;
+}
+.code-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+.code-copy-btn.copied {
+  background: rgba(48, 209, 88, 0.2);
+  border-color: rgba(48, 209, 88, 0.5);
+  color: #30d158;
+}
+
+/* Checked checklist item dimming in backdrop */
+.checklist-item-checked {
+  opacity: 0.48;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Syntax highlighted code block lines in backdrop */
+.hl-code-fence {
+  color: var(--text-muted);
+  opacity: 0.65;
+}
+.hl-code-lang {
+  color: var(--accent-coral-dim);
+  font-weight: 600;
+}
+.hl-code-line {
+  color: #9cdcfe;
 }
 
 /* Title styling: slightly brighter */
@@ -1329,4 +1514,83 @@ body.code-mode #editor {
   background: rgba(245, 166, 35, 0.3);
   border-color: rgba(245, 166, 35, 0.7);
   color: #fff;
+}
+
+/* ---------- Vim Mode Styles ---------- */
+#editor.vim-normal-mode {
+  caret-color: transparent !important;
+}
+
+.vim-block-caret {
+  position: absolute;
+  pointer-events: none;
+  background: var(--text-primary, #e0e0e0);
+  color: var(--bg-primary, #1e1e1e);
+  opacity: 0.75;
+  z-index: 10;
+  border-radius: 1px;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: vimBlink 1.2s infinite;
+}
+
+.vim-block-caret.hidden {
+  display: none !important;
+}
+
+@keyframes vimBlink {
+  0%, 49% {
+    opacity: 0.75;
+  }
+  50%, 100% {
+    opacity: 0.2;
+  }
+}
+
+.vim-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  user-select: none;
+  letter-spacing: 0.3px;
+  margin-left: 8px;
+}
+
+.vim-status-indicator.hidden {
+  display: none !important;
+}
+
+.vim-status-mode {
+  font-weight: 600;
+  color: var(--accent-coral, #ff6b6b);
+}
+
+.vim-status-mode.mode-insert {
+  color: var(--accent-mint, #51cf66);
+}
+
+.vim-status-mode.mode-visual,
+.vim-status-mode.mode-visual-line {
+  color: var(--accent-yellow, #fcc419);
+}
+
+.vim-status-buffer {
+  color: var(--accent-cyan, #22b8cf);
+  font-weight: 500;
+}
+
+.vim-status-coords {
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
 }

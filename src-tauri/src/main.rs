@@ -715,6 +715,17 @@ fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
 }
 
 #[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(&url).spawn();
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd").args(["/C", "start", &url]).spawn();
+    Ok(())
+}
+
+#[tauri::command]
 fn get_rates_info() -> plainpad_core::currency::RatesInfo {
     plainpad_core::currency::get_rates_info()
 }
@@ -1231,6 +1242,7 @@ fn main() {
             stop_autopaste,
             get_autopaste_status,
             submit_clipboard_clip,
+            open_external_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

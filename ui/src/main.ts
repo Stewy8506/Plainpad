@@ -2,6 +2,23 @@
 // No framework: textarea + mirror + overlay editor with IPC to Tauri core.
 import { SlottedNotesBottomBar, DEITY_SLOTS } from './slotted.js';
 import { initTimerUI, clearTimer } from './timer.js';
+import {
+  toggleCheckboxLine,
+  parseCheckboxLine,
+  handleListEnterKey,
+} from './list_manager.js';
+import {
+  findAntilinks,
+  findCodeBlocks,
+  createAntilinkElement,
+  createCodeBlockHeaderElement,
+} from './rich_elements.js';
+import { VimEngine } from './vim.js';
+import {
+  cycleHeadingLevel,
+  applyInlineFormat,
+  CaretNudgeController,
+} from './typography.js';
 
 interface TauriAPI {
   core: {
@@ -115,6 +132,11 @@ let swipeNav = false;
 let swipeSensitivity = 60;
 let autoBrackets = true;
 let tabWidth = '2';
+let inlineChecklistCheckboxesEnabled = true;
+let inlineChecklistBulletsEnabled = true;
+let inlineNumberedListsEnabled = true;
+let disableLinkShortening = false;
+let disableLinkHighlighting = false;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let analyzeTimeout: ReturnType<typeof setTimeout> | null = null;
 let statusTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -147,6 +169,53 @@ const syncStatus = document.getElementById('sync-status') as HTMLSpanElement | n
 const autopasteIndicator = document.getElementById('autopaste-indicator') as HTMLDivElement | null;
 const autopasteStatusText = document.getElementById('autopaste-status-text') as HTMLSpanElement | null;
 const autopasteBtnStop = document.getElementById('autopaste-btn-stop') as HTMLButtonElement | null;
+const vimStatusIndicator = document.getElementById('vim-status-indicator') as HTMLSpanElement | null;
+const readonlyBadge = document.getElementById('readonly-badge') as HTMLElement | null;
+const editorContainer = document.getElementById('editor-container') as HTMLElement;
+
+let activateVimMode = false;
+let forceRTL = false;
+let isReadOnly = false;
+let caretNudgeRaw = 0;
+let caretNudgeForListsRaw = 0;
+
+const vimEngine = new VimEngine({
+  textarea: editor,
+  container: document.getElementById('editor-container') as HTMLElement,
+  statusIndicator: vimStatusIndicator,
+  onTextChange: () => {
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+  },
+});
+
+const caretNudgeController = new CaretNudgeController(editorContainer, editor);
+
+function setRTLEnabled(enabled: boolean): void {
+  forceRTL = enabled;
+  const dirValue = enabled ? 'rtl' : 'ltr';
+  editor.setAttribute('dir', dirValue);
+  backdrop.setAttribute('dir', dirValue);
+  mirror.setAttribute('dir', dirValue);
+  editorContainer.setAttribute('dir', dirValue);
+  document.body.classList.toggle('rtl-mode', enabled);
+  scheduleAnalyze();
+}
+
+function setReadOnly(readOnly: boolean): void {
+  isReadOnly = readOnly;
+  editor.readOnly = readOnly;
+  if (readonlyBadge) {
+    readonlyBadge.classList.toggle('hidden', !readOnly);
+  }
+  document.body.classList.toggle('readonly-mode', readOnly);
+  if (readOnly) {
+    showStatusMessage('Read-Only mode active (Ctrl+Shift+R to unlock)');
+  } else {
+    showStatusMessage('Read-Only mode disabled');
+  }
+}
 
 function showStatusMessage(msg: string, durationMs = 2500): void {
   if (!syncStatus) return;
@@ -216,6 +285,49 @@ buy milk, eggs, bread`;
     if (typeof settings.swipe_sensitivity === 'number') swipeSensitivity = settings.swipe_sensitivity;
     if (typeof settings.auto_brackets === 'boolean') autoBrackets = settings.auto_brackets;
     if (typeof settings.tab_width === 'string') tabWidth = settings.tab_width;
+    if (typeof settings.inlineChecklistCheckboxesEnabled === 'boolean') {
+      inlineChecklistCheckboxesEnabled = settings.inlineChecklistCheckboxesEnabled;
+    } else if (typeof settings.list_checkboxes === 'boolean') {
+      inlineChecklistCheckboxesEnabled = settings.list_checkboxes;
+    }
+    if (typeof settings.inlineChecklistBulletsEnabled === 'boolean') {
+      inlineChecklistBulletsEnabled = settings.inlineChecklistBulletsEnabled;
+    }
+    if (typeof settings.inlineNumberedListsEnabled === 'boolean') {
+      inlineNumberedListsEnabled = settings.inlineNumberedListsEnabled;
+    }
+    if (typeof settings.disableLinkShortening === 'boolean') {
+      disableLinkShortening = settings.disableLinkShortening;
+    }
+    if (typeof settings.disableLinkHighlighting === 'boolean') {
+      disableLinkHighlighting = settings.disableLinkHighlighting;
+    }
+    if (typeof settings.activateVimMode === 'boolean') {
+      activateVimMode = settings.activateVimMode;
+      vimEngine.setEnabled(activateVimMode);
+    }
+    if (typeof settings.forceRTL === 'boolean') {
+      setRTLEnabled(settings.forceRTL);
+    } else if (typeof settings._forceRTLStorage === 'boolean') {
+      setRTLEnabled(settings._forceRTLStorage);
+    }
+    if (typeof settings.read_only === 'boolean') {
+      setReadOnly(settings.read_only);
+    }
+    if (typeof settings._caretVerticalNudgeRaw === 'number') {
+      caretNudgeRaw = settings._caretVerticalNudgeRaw;
+      caretNudgeController.setBaseNudge(caretNudgeRaw);
+    } else if (typeof settings.caret_vertical_nudge === 'number') {
+      caretNudgeRaw = settings.caret_vertical_nudge;
+      caretNudgeController.setBaseNudge(caretNudgeRaw);
+    }
+    if (typeof settings._caretVerticalNudgeForListsRaw === 'number') {
+      caretNudgeForListsRaw = settings._caretVerticalNudgeForListsRaw;
+      caretNudgeController.setListNudge(caretNudgeForListsRaw);
+    } else if (typeof settings.caret_vertical_nudge_list === 'number') {
+      caretNudgeForListsRaw = settings.caret_vertical_nudge_list;
+      caretNudgeController.setListNudge(caretNudgeForListsRaw);
+    }
   }
 
   // Real-time listener for settings changed in Preferences window
@@ -241,6 +353,43 @@ buy milk, eggs, bread`;
       autoBrackets = !!p.value;
     } else if (p.key === 'tab_width') {
       tabWidth = String(p.value);
+    } else if (p.key === 'inlineChecklistCheckboxesEnabled' || p.key === 'list_checkboxes') {
+      inlineChecklistCheckboxesEnabled = !!p.value;
+      scheduleAnalyze();
+    } else if (p.key === 'inlineChecklistBulletsEnabled') {
+      inlineChecklistBulletsEnabled = !!p.value;
+    } else if (p.key === 'inlineNumberedListsEnabled') {
+      inlineNumberedListsEnabled = !!p.value;
+    } else if (p.key === 'disableLinkShortening') {
+      disableLinkShortening = !!p.value;
+      scheduleAnalyze();
+    } else if (p.key === 'disableLinkHighlighting') {
+      disableLinkHighlighting = !!p.value;
+      scheduleAnalyze();
+    } else if (p.key === 'activateVimMode') {
+      activateVimMode = !!p.value;
+      vimEngine.setEnabled(activateVimMode);
+    } else if (p.key === 'forceRTL' || p.key === '_forceRTLStorage') {
+      setRTLEnabled(!!p.value);
+    } else if (p.key === 'read_only') {
+      setReadOnly(!!p.value);
+    } else if (p.key === '_caretVerticalNudgeRaw' || p.key === 'caret_vertical_nudge') {
+      caretNudgeRaw = Number(p.value) || 0;
+      caretNudgeController.setBaseNudge(caretNudgeRaw);
+    } else if (p.key === '_caretVerticalNudgeForListsRaw' || p.key === 'caret_vertical_nudge_list') {
+      caretNudgeForListsRaw = Number(p.value) || 0;
+      caretNudgeController.setListNudge(caretNudgeForListsRaw);
+    }
+  });
+
+  ['keyup', 'click', 'input', 'select'].forEach((evt) => {
+    editor.addEventListener(evt, () => {
+      caretNudgeController.updateCursorLine(editor.selectionStart);
+    });
+  });
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === editor) {
+      caretNudgeController.updateCursorLine(editor.selectionStart);
     }
   });
 
@@ -329,6 +478,9 @@ async function switchToSlot(slotIndex: number): Promise<void> {
   updateNoteUI();
   scheduleAnalyze();
   editor.focus();
+  if (activateVimMode) {
+    vimEngine.onTextLoaded();
+  }
 }
 
 async function loadNote(index: number): Promise<void> {
@@ -353,6 +505,9 @@ async function loadNote(index: number): Promise<void> {
   }
   updateNoteUI();
   scheduleAnalyze();
+  if (activateVimMode) {
+    vimEngine.onTextLoaded();
+  }
 }
 
 async function saveCurrentNote(): Promise<void> {
@@ -424,6 +579,9 @@ async function createNewNote(): Promise<void> {
   }
   updateNoteUI();
   editor.focus();
+  if (activateVimMode) {
+    vimEngine.onTextLoaded();
+  }
 }
 
 async function deleteCurrentNote(): Promise<void> {
@@ -569,9 +727,33 @@ function updateBackdrop(): void {
   const lines = text.split('\n');
   const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
 
+  let inFencedCode = false;
+
   const htmlLines = lines.map((line, idx) => {
     const trimmed = line.trim();
     const lower = trimmed.toLowerCase();
+
+    // Fenced code blocks
+    if (trimmed.startsWith('```')) {
+      if (!inFencedCode) {
+        inFencedCode = true;
+        const lang = trimmed.substring(3).trim();
+        return `<span class="hl-code-fence">\`\`\`</span><span class="hl-code-lang">${escapeHtml(lang)}</span>`;
+      } else {
+        inFencedCode = false;
+        return `<span class="hl-code-fence">\`\`\`</span>`;
+      }
+    }
+
+    if (inFencedCode) {
+      return `<span class="hl-code-line">${escapeHtml(line)}</span>`;
+    }
+
+    // Checked checklist item dimming
+    const cbInfo = parseCheckboxLine(line);
+    if (cbInfo && cbInfo.isChecked) {
+      return `<span class="checklist-item-checked">${escapeHtml(line)}</span>`;
+    }
 
     // Mode keyword on first non-empty line turns green/colored immediately
     if (idx === firstNonEmpty) {
@@ -715,6 +897,7 @@ function triggerExit(el: HTMLElement): void {
 
 function renderOverlay(analysis: Analysis, text: string): void {
   const lines = text.split('\n');
+  const padX = 20; // var(--pad-x)
 
   // Sync scroll position with textarea
   overlay.style.top = `-${editor.scrollTop}px`;
@@ -754,11 +937,20 @@ function renderOverlay(analysis: Analysis, text: string): void {
     const rawLine = lines[anno.line] || '';
     const lineText = rawLine.trim();
 
-    // Inline left position: placed right after typed text with clean spacing
-    const padX = 20; // var(--pad-x)
+    // Inline horizontal position: placed right after typed text with clean spacing
     const textWidth = lineText.length > 0 ? textSpan.offsetWidth : 0;
-    const maxLeft = Math.max(padX, editor.clientWidth - 130);
-    const left = Math.min(padX + textWidth + 10, maxLeft);
+    const maxOffset = Math.max(padX, editor.clientWidth - 130);
+    const offset = Math.min(padX + textWidth + 10, maxOffset);
+
+    const applyPos = (targetEl: HTMLElement) => {
+      if (forceRTL) {
+        targetEl.style.right = `${offset}px`;
+        targetEl.style.left = '';
+      } else {
+        targetEl.style.left = `${offset}px`;
+        targetEl.style.right = '';
+      }
+    };
 
     const annoKey = `${anno.line}:${anno.kind}`;
     const annoValue = String(anno.value || anno.chip || '');
@@ -771,7 +963,28 @@ function renderOverlay(analysis: Analysis, text: string): void {
       // Unchanged: update layout position in case typing on previous lines shifted vertical line offsets
       prevEl.style.top = `${anno.kind === 'checklist' ? top + 2 : top}px`;
       if (anno.kind !== 'checklist') {
-        prevEl.style.left = `${left}px`;
+        applyPos(prevEl);
+      } else {
+        const cbInfo = parseCheckboxLine(rawLine);
+        if (cbInfo) {
+          const prefix = rawLine.substring(0, cbInfo.checkOffset);
+          let checkOffset = padX;
+          if (prefix.length > 0) {
+            const tempSpan = document.createElement('span');
+            tempSpan.textContent = prefix;
+            tempSpan.style.display = 'inline-block';
+            mirror.appendChild(tempSpan);
+            checkOffset = padX + tempSpan.offsetWidth;
+            tempSpan.remove();
+          }
+          if (forceRTL) {
+            prevEl.style.right = `${checkOffset}px`;
+            prevEl.style.left = '';
+          } else {
+            prevEl.style.left = `${checkOffset}px`;
+            prevEl.style.right = '';
+          }
+        }
       }
       existingEls.delete(annoKey);
       continue;
@@ -790,7 +1003,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-math${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
+      applyPos(el);
       const prefix = hasTrailingEquals ? '' : '= ';
       const formatted = formatNumber(anno.value);
       renderKineticContent(el, prefix, formatted, isNew);
@@ -800,7 +1013,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-conversion${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
+      applyPos(el);
       const prefix = hasTrailingEquals ? '' : '= ';
       renderKineticContent(el, prefix, anno.value, isNew);
       el.title = anno.why;
@@ -808,7 +1021,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el = document.createElement('div');
       el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
+      applyPos(el);
       const clockSvg = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align: -1px; margin-right: 5px;"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v3.5l2 2"/></svg>`;
       const iconSpan = document.createElement('span');
       iconSpan.innerHTML = clockSvg;
@@ -823,7 +1036,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el = document.createElement('div');
       el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
+      applyPos(el);
       const isPause = anno.value === 'pause';
       const iconSvg = isPause
         ? `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><path d="M4 3.5h3v9H4zm5 0h3v9H9z"/></svg>`
@@ -845,7 +1058,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       el = document.createElement('div');
       el.className = `anno anno-timer-chip stop${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
+      applyPos(el);
       const stopSvg = `<svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: -1px; margin-right: 5px;"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>`;
       const iconSpan = document.createElement('span');
       iconSpan.innerHTML = stopSvg;
@@ -857,27 +1070,141 @@ function renderOverlay(analysis: Analysis, text: string): void {
         clearTimer();
         invoke('cancel_timer').catch(console.error);
       });
-    } else if (anno.kind === 'checklist' && (lineText.startsWith('[ ] ') || lineText.startsWith('[x] ') || lineText.startsWith('[X] '))) {
-      const isChecked = lineText.startsWith('[x] ') || lineText.startsWith('[X] ');
-      el = document.createElement('div');
-      el.className = `anno-checkbox${isChecked ? ' checked' : ''}`;
-      el.style.top = `${top + 2}px`;
-      el.dataset.line = String(anno.line);
-      el.addEventListener('click', () => toggleCheckbox(anno.line));
-    } else if (anno.chip) {
-      el = document.createElement('div');
-      el.className = `anno anno-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
-      el.style.top = `${top}px`;
-      el.style.left = `${left}px`;
-      el.dataset.line = String(anno.line);
-      el.textContent = anno.chip;
-      el.title = anno.why;
-      el.addEventListener('click', () => acceptChip(anno.line, lines[anno.line] || ''));
+    } else if (anno.kind === 'checklist') {
+      const cbInfo = parseCheckboxLine(rawLine);
+      if (inlineChecklistCheckboxesEnabled && cbInfo) {
+        el = document.createElement('div');
+        el.className = `anno-checkbox${cbInfo.isChecked ? ' checked' : ''}`;
+        el.style.top = `${top + 3}px`;
+        const prefix = rawLine.substring(0, cbInfo.checkOffset);
+        let checkOffset = padX;
+        if (prefix.length > 0) {
+          const tempSpan = document.createElement('span');
+          tempSpan.textContent = prefix;
+          tempSpan.style.display = 'inline-block';
+          mirror.appendChild(tempSpan);
+          checkOffset = padX + tempSpan.offsetWidth;
+          tempSpan.remove();
+        }
+        if (forceRTL) {
+          el.style.right = `${checkOffset}px`;
+          el.style.left = '';
+        } else {
+          el.style.left = `${checkOffset}px`;
+          el.style.right = '';
+        }
+        if (cbInfo.isChecked) {
+          el.innerHTML = `<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5l2.5 2.5 5-5"/></svg>`;
+        }
+        el.dataset.line = String(anno.line);
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleCheckbox(anno.line);
+        });
+      } else if (anno.chip) {
+        el = document.createElement('div');
+        el.className = `anno anno-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
+        el.style.top = `${top}px`;
+        applyPos(el);
+        el.dataset.line = String(anno.line);
+        el.textContent = anno.chip;
+        el.title = anno.why;
+        el.addEventListener('click', () => acceptChip(anno.line, lines[anno.line] || ''));
+      }
     }
 
     if (el) {
       el.dataset.annoKey = annoKey;
       overlay.appendChild(el);
+    }
+  }
+
+  // Smart Antilink pills
+  if (!disableLinkHighlighting) {
+    const antilinks = findAntilinks(text, disableLinkShortening);
+    for (let alIdx = 0; alIdx < antilinks.length; alIdx++) {
+      const al = antilinks[alIdx];
+      if (al.line >= lineEls.length) continue;
+      const lineEl = lineEls[al.line];
+      if (!lineEl) continue;
+      const top = lineEl.offsetTop;
+      const lineStr = lines[al.line] || '';
+      const prefixStr = lineStr.substring(0, al.lineStartIndex);
+
+      let alLeft = padX;
+      if (prefixStr.length > 0) {
+        const tempSpan = document.createElement('span');
+        tempSpan.textContent = prefixStr;
+        tempSpan.style.display = 'inline-block';
+        mirror.appendChild(tempSpan);
+        alLeft = padX + tempSpan.offsetWidth;
+        tempSpan.remove();
+      }
+
+      const annoKey = `antilink:${al.line}:${alIdx}:${al.fullUrl}`;
+      const prevEl = existingEls.get(annoKey);
+      if (prevEl) {
+        prevEl.style.top = `${top + 1}px`;
+        if (forceRTL) {
+          prevEl.style.right = `${alLeft}px`;
+          prevEl.style.left = '';
+        } else {
+          prevEl.style.left = `${alLeft}px`;
+          prevEl.style.right = '';
+        }
+        existingEls.delete(annoKey);
+        continue;
+      }
+
+      const pill = createAntilinkElement(al, top + 1, alLeft);
+      if (forceRTL) {
+        pill.style.right = `${alLeft}px`;
+        pill.style.left = '';
+      }
+      pill.dataset.annoKey = annoKey;
+      overlay.appendChild(pill);
+    }
+  }
+
+  // Rounded code blocks with Copy button
+  const codeBlocks = findCodeBlocks(text);
+  for (let cbIdx = 0; cbIdx < codeBlocks.length; cbIdx++) {
+    const cb = codeBlocks[cbIdx];
+    if (cb.startLine >= lineEls.length) continue;
+    const startLineEl = lineEls[cb.startLine];
+    const endLineIdx = Math.min(cb.endLine, lineEls.length - 1);
+    const endLineEl = lineEls[endLineIdx];
+    if (!startLineEl || !endLineEl) continue;
+
+    const top = startLineEl.offsetTop;
+    const height = (endLineEl.offsetTop + endLineEl.offsetHeight) - top;
+
+    // Header element with Language badge and Copy Code button
+    const headerKey = `codeblock-header:${cb.startLine}:${cbIdx}`;
+    const prevHeader = existingEls.get(headerKey);
+    if (prevHeader) {
+      prevHeader.style.top = `${top}px`;
+      existingEls.delete(headerKey);
+    } else {
+      const headerEl = createCodeBlockHeaderElement(cb, top, 0);
+      headerEl.dataset.annoKey = headerKey;
+      overlay.appendChild(headerEl);
+    }
+
+    // Rounded background container
+    const bgKey = `codeblock-bg:${cb.startLine}:${cbIdx}`;
+    const prevBg = existingEls.get(bgKey);
+    if (prevBg) {
+      prevBg.style.top = `${top}px`;
+      prevBg.style.height = `${height}px`;
+      existingEls.delete(bgKey);
+    } else {
+      const bgEl = document.createElement('div');
+      bgEl.className = 'rounded-code-block';
+      bgEl.style.top = `${top}px`;
+      bgEl.style.height = `${height}px`;
+      bgEl.dataset.annoKey = bgKey;
+      overlay.appendChild(bgEl);
     }
   }
 
@@ -913,19 +1240,13 @@ function formatNumber(value: string): string {
 // ---------- Checkbox toggling ----------
 
 function toggleCheckbox(lineIndex: number): void {
-  const lines = editor.value.split('\n');
-  if (lineIndex >= lines.length) return;
-  const line = lines[lineIndex];
-  const trimmed = line.trimStart();
-  const indent = line.substring(0, line.length - trimmed.length);
-
-  if (trimmed.startsWith('[ ] ')) {
-    lines[lineIndex] = indent + '[x] ' + trimmed.substring(4);
-  } else if (trimmed.startsWith('[x] ') || trimmed.startsWith('[X] ')) {
-    lines[lineIndex] = indent + '[ ] ' + trimmed.substring(4);
-  }
-
-  editor.value = lines.join('\n');
+  const selStart = editor.selectionStart;
+  const selEnd = editor.selectionEnd;
+  const res = toggleCheckboxLine(editor.value, lineIndex);
+  editor.value = res.nextText;
+  editor.selectionStart = selStart;
+  editor.selectionEnd = selEnd;
+  updateBackdrop();
   scheduleSave();
   scheduleAnalyze();
 }
@@ -1258,9 +1579,123 @@ editor.addEventListener('scroll', () => {
     backdrop.scrollTop = editor.scrollTop;
     backdrop.scrollLeft = editor.scrollLeft;
   }
+  vimEngine.onScroll();
 });
 
 editor.addEventListener('keydown', (e: KeyboardEvent) => {
+  const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
+  // Toggle Read-Only Mode: Ctrl+Shift+R / Cmd+Shift+R
+  if (isCtrlOrMeta && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
+    e.preventDefault();
+    setReadOnly(!isReadOnly);
+    invoke('set_setting', { key: 'read_only', value: isReadOnly }).catch(console.error);
+    return;
+  }
+
+  // Toggle RTL Mode: Ctrl+Shift+L / Cmd+Shift+L
+  if (isCtrlOrMeta && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+    e.preventDefault();
+    setRTLEnabled(!forceRTL);
+    invoke('set_setting', { key: 'forceRTL', value: forceRTL }).catch(console.error);
+    invoke('set_setting', { key: '_forceRTLStorage', value: forceRTL }).catch(console.error);
+    return;
+  }
+
+  // If in Read-Only mode, block text modifying keys
+  if (isReadOnly) {
+    const isNavigation = [
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+      'Home', 'End', 'PageUp', 'PageDown', 'Escape'
+    ].includes(e.key);
+    const isAllowedShortcut = isCtrlOrMeta && (
+      e.key === 'c' || e.key === 'C' ||
+      e.key === 'a' || e.key === 'A' ||
+      (e.key >= '1' && e.key <= '9') ||
+      e.key === 'Tab' ||
+      e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+      (e.shiftKey && (e.key === 'E' || e.key === 'e'))
+    );
+    if (!isNavigation && !isAllowedShortcut) {
+      e.preventDefault();
+      showStatusMessage('Note is Read-Only (Ctrl+Shift+R to unlock)');
+      return;
+    }
+  }
+
+  if (activateVimMode) {
+    const handled = vimEngine.handleKeyDown(e);
+    if (handled) return;
+  }
+
+  // Heading cycle: Ctrl+H (Body -> # -> ## -> ### -> Body)
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && (e.key === 'h' || e.key === 'H')) {
+    e.preventDefault();
+    const { newText, newCursorPos } = cycleHeadingLevel(editor.value, editor.selectionStart);
+    editor.value = newText;
+    editor.selectionStart = editor.selectionEnd = newCursorPos;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    caretNudgeController.updateCursorLine(editor.selectionStart);
+    return;
+  }
+
+  // Bold: Ctrl+B
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+    e.preventDefault();
+    const { newText, newStart, newEnd } = applyInlineFormat(editor.value, editor.selectionStart, editor.selectionEnd, 'bold');
+    editor.value = newText;
+    editor.selectionStart = newStart;
+    editor.selectionEnd = newEnd;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // Italic: Ctrl+I
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && (e.key === 'i' || e.key === 'I')) {
+    e.preventDefault();
+    const { newText, newStart, newEnd } = applyInlineFormat(editor.value, editor.selectionStart, editor.selectionEnd, 'italic');
+    editor.value = newText;
+    editor.selectionStart = newStart;
+    editor.selectionEnd = newEnd;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // Strikethrough: Ctrl+Shift+X or Ctrl+Alt+S
+  if (
+    (isCtrlOrMeta && e.shiftKey && (e.key === 'x' || e.key === 'X')) ||
+    (isCtrlOrMeta && e.altKey && (e.key === 's' || e.key === 'S'))
+  ) {
+    e.preventDefault();
+    const { newText, newStart, newEnd } = applyInlineFormat(editor.value, editor.selectionStart, editor.selectionEnd, 'strike');
+    editor.value = newText;
+    editor.selectionStart = newStart;
+    editor.selectionEnd = newEnd;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
+  // Underline: Ctrl+U
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && (e.key === 'u' || e.key === 'U')) {
+    e.preventDefault();
+    const { newText, newStart, newEnd } = applyInlineFormat(editor.value, editor.selectionStart, editor.selectionEnd, 'underline');
+    editor.value = newText;
+    editor.selectionStart = newStart;
+    editor.selectionEnd = newEnd;
+    updateBackdrop();
+    scheduleSave();
+    scheduleAnalyze();
+    return;
+  }
+
   // Esc → stop autopaste first if active, otherwise hide window
   if (e.key === 'Escape') {
     e.preventDefault();
@@ -1318,8 +1753,6 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
-  const isCtrlOrMeta = e.ctrlKey || e.metaKey;
-
   // Direct slot jump: Ctrl+1 through Ctrl+9
   if (isCtrlOrMeta && !e.shiftKey && !e.altKey && e.key >= '1' && e.key <= '9') {
     e.preventDefault();
@@ -1373,6 +1806,22 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
       e.preventDefault();
       invoke('start_timer_phrase', { phrase: rawLine }).catch(console.error);
       return;
+    }
+
+    // List continuation and termination on plain Enter
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const handled = handleListEnterKey(editor, {
+        bulletListsEnabled: inlineChecklistBulletsEnabled,
+        numberedListsEnabled: inlineNumberedListsEnabled,
+        checkboxesEnabled: inlineChecklistCheckboxesEnabled,
+      });
+      if (handled) {
+        e.preventDefault();
+        updateBackdrop();
+        scheduleSave();
+        scheduleAnalyze();
+        return;
+      }
     }
   }
 

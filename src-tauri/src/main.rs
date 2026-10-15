@@ -23,6 +23,9 @@ struct AppState {
 type AppStateLock = Mutex<AppState>;
 
 fn data_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("PLAINPAD_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
     dirs_next().unwrap_or_else(|| std::env::current_dir().unwrap().join("plainpad-data"))
 }
 
@@ -959,6 +962,14 @@ fn fetch_and_save_rates(rates_path: &std::path::Path) -> Result<plainpad_core::c
 // ---------- main ----------
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    {
+        // Avoid WebKitGTK 2.40+ hardware dmabuf compositing crash / blank screen on Linux Wayland/X11
+        if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     let dir = data_dir();
     let db_path = dir.join("plainpad.db");
     let store = Arc::new(
@@ -1018,11 +1029,17 @@ fn main() {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
 
+            let is_transparent = if cfg!(target_os = "linux") {
+                std::env::var("PLAINPAD_TRANSPARENT").map(|v| v == "1" || v == "true").unwrap_or(false)
+            } else {
+                true
+            };
+
             let mut builder = WebviewWindowBuilder::new(&handle, "main", tauri::WebviewUrl::App("index.html".into()))
                 .title("Plainpad")
                 .inner_size(w, h)
                 .decorations(false)
-                .transparent(true)
+                .transparent(is_transparent)
                 .always_on_top(is_pinned)
                 .skip_taskbar(false)
                 .visible(true)
@@ -1049,7 +1066,7 @@ fn main() {
                 .build()?;
 
             let tray_handle = handle.clone();
-            TrayIconBuilder::new()
+            if let Err(e) = TrayIconBuilder::new()
                 .icon(icon)
                 .menu(&menu)
                 .tooltip("Plainpad")
@@ -1073,13 +1090,16 @@ fn main() {
                         _ => {}
                     }
                 })
-                .build(app)?;
+                .build(app)
+            {
+                eprintln!("[Tray] Warning: System tray could not be initialized: {e}");
+            }
 
             // Global hotkey (Alt+A)
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
             let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::KeyA);
             let hotkey_handle = handle.clone();
-            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
+            if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
                 if let Some(w) = hotkey_handle.get_webview_window("main") {
                     if w.is_visible().unwrap_or(false) {
                         pause_timer_if_configured(&hotkey_handle);
@@ -1089,7 +1109,9 @@ fn main() {
                         w.set_focus().ok();
                     }
                 }
-            })?;
+            }) {
+                eprintln!("[Hotkey] Warning: Could not register global shortcut: {e}");
+            }
 
             // Fire overdue timers (expired while app was closed)
             for t in &overdue {

@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plainpad</title>
   <meta name="description" content="Plainpad — the scratchpad where you just write, and the app works out the rest." />
+  <script>
+    if (typeof navigator !== 'undefined' && (/Linux/i.test(navigator.userAgent) || /Linux/i.test(navigator.platform))) {
+      document.documentElement.classList.add('platform-linux');
+    }
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>

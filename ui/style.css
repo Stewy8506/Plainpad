@@ -198,6 +198,11 @@ body {
   overflow: hidden;
 }
 
+html.platform-linux,
+html.platform-linux body {
+  background: var(--bg-card) !important;
+}
+
 /* ---------- Chrome Bars ---------- */
 .chrome-bar {
   display: flex;

@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Plainpad Preferences</title>
+  <script>
+    if (typeof navigator !== 'undefined' && (/Linux/i.test(navigator.userAgent) || /Linux/i.test(navigator.platform))) {
+      document.documentElement.classList.add('platform-linux');
+    }
+  </script>
   <link rel="stylesheet" href="settings.css" />
 </head>
 <body class="settings-window">

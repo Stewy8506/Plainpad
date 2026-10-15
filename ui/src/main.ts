@@ -13,6 +13,10 @@ import {
   createAntilinkElement,
   createCodeBlockHeaderElement,
 } from './rich_elements.js';
+
+if (typeof navigator !== 'undefined' && (/Linux/i.test(navigator.userAgent) || /Linux/i.test(navigator.platform))) {
+  document.documentElement.classList.add('platform-linux');
+}
 import { VimEngine } from './vim.js';
 import {
   cycleHeadingLevel,

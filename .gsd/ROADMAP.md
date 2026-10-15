@@ -6,7 +6,7 @@ updated: 2026-10-13T20:14:00+05:30
 
 # Roadmap
 
-> **Current Phase:** 4 - Natural-Language Sentence Triggers & AutoPaste
+> **Current Phase:** 5 - Timer, Stopwatch & Pomodoro Subsystem
 > **Status:** ready for planning
 
 ## Must-Haves (from SPEC)
@@ -14,7 +14,7 @@ updated: 2026-10-13T20:14:00+05:30
 - [x] SQLite persistence matching Antinote Core Data Model 9 (5 entities, 17 Note properties)
 - [x] 9 Slotted Notes Greek-god system (Hermes through Zeus) with bottom bar and `Ctrl+1..9` hotkeys
 - [x] Natural-language math engine supporting fractions, decimals, scientific notation, trig modes, and 6 conversion domains
-- [ ] Natural-language sentence trigger engine (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`)
+- [x] Natural-language sentence trigger engine (`sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, `timer`)
 - [ ] Timer and Pomodoro subsystem with circular visual progress and native audio chimes (`backtowork`, `countdowndone`, `workdone`)
 - [ ] Rich editor capabilities: interactive checkboxes (`- [ ]`), list autocompletion, Antilink URL pills, rounded syntax-highlighted code blocks, and modal Vim mode
 - [ ] JavaScript extension runtime executing `antinote-extensions-base-v0.0.1.js` with secure API bridges and multi-provider AI model catalog
@@ -59,13 +59,13 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 4: Natural-Language Sentence Triggers & AutoPaste
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Sentence-level trigger engine processing `sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, and `timer` keywords with configurable aliases, master disable toggle, and continuous AutoPaste clipboard capture mode.  
 **Depends on:** Phase 1, Phase 3  
 **Requirements:** REQ-12, REQ-13, REQ-14  
 **Plans:**
-- [ ] Plan 4.1: Trigger evaluator for `sum`, `avg`, `math`, `count`, `list`, `check`, `code` with alias mapping
-- [ ] Plan 4.2: AutoPaste continuous clipboard ingestion engine with `Esc` termination
+- [x] Plan 4.1: Trigger evaluator for `sum`, `avg`, `math`, `count`, `list`, `check`, `code` with alias mapping
+- [x] Plan 4.2: AutoPaste continuous clipboard ingestion engine with `Esc` termination
 
 ---
 
@@ -122,7 +122,7 @@ updated: 2026-10-13T20:14:00+05:30
 | **Phase 1** | SQLite Storage & Core Data Model 9 | ✅ Complete | 3/3 | 100% |
 | **Phase 2** | Slotted Notes (Greek Gods) | ✅ Complete | 2/2 | 100% |
 | **Phase 3** | Math & 6-Domain Unit Conversions | ✅ Complete | 3/3 | 100% |
-| **Phase 4** | Sentence Triggers & AutoPaste | ⬜ Not Started | 0/2 | 0% |
+| **Phase 4** | Sentence Triggers & AutoPaste | ✅ Complete | 2/2 | 100% |
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ⬜ Not Started | 0/2 | 0% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ⬜ Not Started | 0/3 | 0% |
 | **Phase 7** | JS Extension Runtime & AI Catalog | ⬜ Not Started | 0/2 | 0% |
@@ -137,7 +137,7 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase 1 | 2026-10-13 | 2026-10-13 | ~45m |
 | Phase 2 | 2026-10-13 | 2026-10-13 | ~30m |
 | Phase 3 | 2026-10-13 | 2026-10-13 | ~45m |
-| Phase 4 | — | — | — |
+| Phase 4 | 2026-10-13 | 2026-10-15 | ~40m |
 | Phase 5 | — | — | — |
 | Phase 6 | — | — | — |
 | Phase 7 | — | — | — |

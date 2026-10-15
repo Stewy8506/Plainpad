@@ -26,9 +26,9 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-09** | **Trig & Angle Modes**: Configurable `degrees` vs `radians` modes and trigonometric/hyperbolic functions (`sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `sqrt`, `cuberoot`). | SPEC §4.1 | 3 | Complete |
 | **REQ-10** | **5 Physical Conversion Domains**: Comprehensive bidirectional conversions for Distance, Area (including `cuerda`, `dunam`, `bigha`), Mass (including `stones`, long ton), Volume, and Temperature. | SPEC §4.2 | 3 | Complete |
 | **REQ-11** | **Currency Conversion & Formatting**: 160+ fiat currencies and top cryptocurrencies, background rates cache, thousands separators, and configurable decimal precision. | SPEC §4.2 | 3 | Complete |
-| **REQ-12** | **Natural-Language Sentence Triggers**: Evaluation of `sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, and `timer` keywords at paragraph and list scope. | SPEC §5 | 4 | Pending |
-| **REQ-13** | **Trigger Configuration**: Master toggle `disableAllKeywords`, `allowArgumentsAfterKeyword`, and custom trigger alias mappings. | SPEC §5 | 4 | Pending |
-| **REQ-14** | **AutoPaste & Clipboard Ingestion**: Clipboard monitoring mode appending copied text continuously until dismissed with `Esc`. | SPEC §5, findings §6 | 4 | Pending |
+| **REQ-12** | **Natural-Language Sentence Triggers**: Evaluation of `sum`, `avg`, `math`, `count`, `list`, `check`, `code`, `paste`, and `timer` keywords at paragraph and list scope. | SPEC §5 | 4 | Complete |
+| **REQ-13** | **Trigger Configuration**: Master toggle `disableAllKeywords`, `allowArgumentsAfterKeyword`, and custom trigger alias mappings. | SPEC §5 | 4 | Complete |
+| **REQ-14** | **AutoPaste & Clipboard Ingestion**: Clipboard monitoring mode appending copied text continuously until dismissed with `Esc`. | SPEC §5, findings §6 | 4 | Complete |
 | **REQ-15** | **Timer & Pomodoro Parsing**: Parse `timer` (stopwatch), `timer 5` (countdown), `timer 3:30`, `timer pomo` (25m/5m), `timer 57 11`, and controls (`timer p`, `timer r`, `timer s`). | SPEC §6.1 | 5 | Pending |
 | **REQ-16** | **Timer UI & Circular Visuals**: Animated circular progress pill (`circleDiameter`, `circleSpacing`), remaining time display, and work/break phase indicators. | SPEC §6.2 | 5 | Pending |
 | **REQ-17** | **Audio Alerts & Modal Overlays**: Shipped audio chimes (`backtowork.m4a`, `countdowndone.m4a`, `workdone.m4a`) and optional full-screen Pomodoro alert overlay. | SPEC §6.2 | 5 | Pending |

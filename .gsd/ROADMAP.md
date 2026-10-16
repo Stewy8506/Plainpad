@@ -105,15 +105,14 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite
-**Status:** ✅ Complete  
+**Status:** ⬜ Not Started  
 **Objective:** Translucent glass floating window, global hotkey (`Ctrl+Space`), system tray, WebGL Void shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`), canvas grid textures, search modal, and third-party export suite (Markdown, Obsidian, Bear, Notion, Apple Notes, Custom URL, ZIP).  
 **Depends on:** Phase 1, Phase 2, Phase 6  
 **Requirements:** REQ-26, REQ-27, REQ-28, REQ-29, REQ-30  
 **Plans:**
-- [x] Plan 8.1: Window translucency, global summon hotkey, system tray icon, and background canvas grid textures
-- [x] Plan 8.2: The Void WebGL distortion shaders and empty confirmation dialog
-- [x] Plan 8.3: Search engine (`FindAndReplaceManager`) and third-party export suite (Obsidian, Bear, Notion, Apple Notes, URL template, ZIP)
-- [x] Plan 8.4: Fix Void confirm dialog HTML tag closure & unnest export modal
+- [ ] Plan 8.1: Window translucency, global summon hotkey, system tray icon, and background canvas grid textures
+- [ ] Plan 8.2: The Void WebGL distortion shaders and empty confirmation dialog
+- [ ] Plan 8.3: Search engine (`FindAndReplaceManager`) and third-party export suite (Obsidian, Bear, Notion, Apple Notes, URL template, ZIP)
 
 ---
 
@@ -128,7 +127,7 @@ updated: 2026-10-13T20:14:00+05:30
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ✅ Complete | 3/3 | 100% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ✅ Complete | 3/3 | 100% |
 | **Phase 7** | JS Extension Runtime & AI Catalog | ✅ Complete | 2/2 | 100% |
-| **Phase 8** | Window Chrome, Shaders & Export Suite | ✅ Complete | 4/4 | 100% |
+| **Phase 8** | Window Chrome, Shaders & Export Suite | ⬜ Not Started | 0/3 | 0% |
 
 ---
 
@@ -143,4 +142,4 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase 5 | 2026-10-15 | 2026-10-15 | ~45m |
 | Phase 6 | 2026-10-15 | 2026-10-15 | ~50m |
 | Phase 7 | 2026-10-15 | 2026-10-15 | ~40m |
-| Phase 8 | 2026-10-16 | 2026-10-16 | ~50m |
+| Phase 8 | — | — | — |

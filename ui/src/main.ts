@@ -29,6 +29,9 @@ import {
   executeCommand,
   type DetectedCommand,
 } from './extensions.js';
+import { voidShader } from './void_shaders.js';
+import { FindAndReplaceManager } from './search.js';
+import { ExportManager } from './export.js';
 
 interface TauriAPI {
   core: {
@@ -183,6 +186,19 @@ const vimStatusIndicator = document.getElementById('vim-status-indicator') as HT
 const readonlyBadge = document.getElementById('readonly-badge') as HTMLElement | null;
 const editorContainer = document.getElementById('editor-container') as HTMLElement;
 
+// The Void & Shaders DOM elements
+const btnVoid = document.getElementById('btn-void') as HTMLButtonElement | null;
+const voidModal = document.getElementById('void-modal') as HTMLDivElement | null;
+const voidModalBackdrop = document.getElementById('void-modal-backdrop') as HTMLDivElement | null;
+const btnCloseVoid = document.getElementById('btn-close-void') as HTMLButtonElement | null;
+const btnEmptyVoid = document.getElementById('btn-empty-void') as HTMLButtonElement | null;
+const voidNoteList = document.getElementById('void-note-list') as HTMLDivElement | null;
+const voidConfirmDialog = document.getElementById('void-confirm-dialog') as HTMLDivElement | null;
+const voidConfirmBackdrop = document.getElementById('void-confirm-backdrop') as HTMLDivElement | null;
+const voidConfirmMsg = document.getElementById('void-confirm-message') as HTMLParagraphElement | null;
+const btnCancelEmptyVoid = document.getElementById('btn-cancel-empty-void') as HTMLButtonElement | null;
+const btnConfirmEmptyVoid = document.getElementById('btn-confirm-empty-void') as HTMLButtonElement | null;
+
 let activateVimMode = false;
 let forceRTL = false;
 let isReadOnly = false;
@@ -200,6 +216,106 @@ const vimEngine = new VimEngine({
   },
 });
 
+const btnSearch = document.getElementById('btn-search') as HTMLButtonElement | null;
+const findReplaceContainer = document.getElementById('find-replace-container') as HTMLElement;
+const searchInput = document.getElementById('search-input') as HTMLInputElement;
+const replaceInput = document.getElementById('replace-input') as HTMLInputElement;
+const searchMatchType = document.getElementById('search-match-type') as HTMLSelectElement;
+const btnSearchCase = document.getElementById('btn-search-case') as HTMLButtonElement;
+const btnSearchRegex = document.getElementById('btn-search-regex') as HTMLButtonElement;
+const btnSearchScopeNote = document.getElementById('btn-search-scope-note') as HTMLButtonElement;
+const btnSearchScopeAll = document.getElementById('btn-search-scope-all') as HTMLButtonElement;
+const btnSearchPrev = document.getElementById('btn-search-prev') as HTMLButtonElement;
+const btnSearchNext = document.getElementById('btn-search-next') as HTMLButtonElement;
+const btnSearchClose = document.getElementById('btn-search-close') as HTMLButtonElement;
+const btnReplaceOne = document.getElementById('btn-replace-one') as HTMLButtonElement;
+const btnReplaceAll = document.getElementById('btn-replace-all') as HTMLButtonElement;
+const searchMatchCount = document.getElementById('search-match-count') as HTMLElement;
+const searchResultsList = document.getElementById('search-results-list') as HTMLElement;
+const findReplaceRow = document.getElementById('find-replace-row') as HTMLElement;
+
+const findAndReplaceManager = new FindAndReplaceManager({
+  editor,
+  container: findReplaceContainer,
+  searchInput,
+  replaceInput,
+  matchTypeSelect: searchMatchType,
+  btnCase: btnSearchCase,
+  btnRegex: btnSearchRegex,
+  btnScopeNote: btnSearchScopeNote,
+  btnScopeAll: btnSearchScopeAll,
+  btnPrev: btnSearchPrev,
+  btnNext: btnSearchNext,
+  btnClose: btnSearchClose,
+  btnReplaceOne,
+  btnReplaceAll,
+  matchCountLabel: searchMatchCount,
+  resultsList: searchResultsList,
+  replaceRow: findReplaceRow,
+});
+
+findAndReplaceManager.onHighlightUpdate = () => {
+  updateBackdrop();
+};
+findAndReplaceManager.onTextChange = (newText: string) => {
+  currentText = newText;
+  editor.value = newText;
+  updateBackdrop();
+  scheduleSave();
+  scheduleAnalyze();
+};
+findAndReplaceManager.onStatusMessage = (msg: string) => {
+  showStatusMessage(msg);
+};
+findAndReplaceManager.fetchAllNotes = async () => {
+  try {
+    const all = await invoke<any[]>('get_all_notes');
+    if (Array.isArray(all) && all.length > 0) return all;
+  } catch {
+    // fallback if get_all_notes not yet compiled
+  }
+  const list = (await invoke<NoteMeta[]>('list_notes')) || [];
+  const fullNotes: any[] = [];
+  for (const meta of list) {
+    try {
+      const full = await invoke<any>('load_note', { id: meta.id });
+      if (full) fullNotes.push(full);
+    } catch {
+      // ignore
+    }
+  }
+  return fullNotes;
+};
+findAndReplaceManager.onSelectNote = async (noteId, isSlotted, slotIndex, offset) => {
+  if (isSlotted && slotIndex >= 0) {
+    await switchToSlot(slotIndex);
+  } else {
+    const idx = notes.findIndex((n) => n.id === noteId);
+    if (idx >= 0) {
+      await loadNote(idx);
+    }
+  }
+  if (offset !== undefined && offset >= 0) {
+    setTimeout(() => {
+      findAndReplaceManager.focusMatch(0, true);
+    }, 50);
+  }
+};
+
+const exportModal = document.getElementById('export-modal') as HTMLElement;
+const exportModalBackdrop = document.getElementById('export-modal-backdrop') as HTMLElement;
+const btnCloseExport = document.getElementById('btn-close-export') as HTMLButtonElement;
+
+const exportManager = new ExportManager({
+  modal: exportModal,
+  backdrop: exportModalBackdrop,
+  closeBtn: btnCloseExport,
+});
+
+exportManager.onStatusMessage = (msg: string) => {
+  showStatusMessage(msg);
+};
+
 const caretNudgeController = new CaretNudgeController(editorContainer, editor);
 
 function setRTLEnabled(enabled: boolean): void {
@@ -211,6 +327,24 @@ function setRTLEnabled(enabled: boolean): void {
   editorContainer.setAttribute('dir', dirValue);
   document.body.classList.toggle('rtl-mode', enabled);
   scheduleAnalyze();
+}
+
+function setGridOverlay(mode: string): void {
+  if (!editorContainer) return;
+  editorContainer.classList.remove('grid-none', 'grid-dots', 'grid-small-grid', 'grid-big-grid');
+  if (mode === 'dots') {
+    editorContainer.classList.add('grid-dots');
+  } else if (mode === 'smallGrid' || mode === 'small-grid') {
+    editorContainer.classList.add('grid-small-grid');
+  } else if (mode === 'bigGrid' || mode === 'big-grid') {
+    editorContainer.classList.add('grid-big-grid');
+  } else {
+    editorContainer.classList.add('grid-none');
+  }
+}
+
+function setSolidBars(enabled: boolean): void {
+  document.body.classList.toggle('solid-bars', !!enabled);
 }
 
 function setReadOnly(readOnly: boolean): void {
@@ -322,6 +456,11 @@ async function executeEditorCommand(
 // ---------- Init ----------
 
 async function init(): Promise<void> {
+  const voidCanvas = document.getElementById('void-canvas') as HTMLCanvasElement | null;
+  if (voidCanvas) {
+    voidShader.attach(voidCanvas);
+  }
+
   await extensionRuntime.init().catch(console.error);
 
   const slottedBarContainer = document.getElementById('slotted-bar');
@@ -421,6 +560,18 @@ buy milk, eggs, bread`;
       caretNudgeForListsRaw = settings.caret_vertical_nudge_list;
       caretNudgeController.setListNudge(caretNudgeForListsRaw);
     }
+    if (typeof settings.gridOverlayMode === 'string') {
+      setGridOverlay(settings.gridOverlayMode);
+    } else if (typeof settings.grid_overlay === 'string') {
+      setGridOverlay(settings.grid_overlay);
+    }
+    if (typeof settings.solidBarsInTransparencyMode === 'boolean') {
+      setSolidBars(settings.solidBarsInTransparencyMode);
+    } else if (typeof settings.solid_bars === 'boolean') {
+      setSolidBars(settings.solid_bars);
+    } else if (typeof settings._solidBarsInTransparencyMode === 'boolean') {
+      setSolidBars(settings._solidBarsInTransparencyMode);
+    }
   }
 
   // Real-time listener for settings changed in Preferences window
@@ -472,6 +623,10 @@ buy milk, eggs, bread`;
     } else if (p.key === '_caretVerticalNudgeForListsRaw' || p.key === 'caret_vertical_nudge_list') {
       caretNudgeForListsRaw = Number(p.value) || 0;
       caretNudgeController.setListNudge(caretNudgeForListsRaw);
+    } else if (p.key === 'gridOverlayMode' || p.key === 'grid_overlay') {
+      setGridOverlay(String(p.value));
+    } else if (p.key === 'solidBarsInTransparencyMode' || p.key === 'solid_bars' || p.key === '_solidBarsInTransparencyMode') {
+      setSolidBars(!!p.value);
     }
   });
 
@@ -535,6 +690,21 @@ buy milk, eggs, bread`;
   } catch (err) {
     console.warn('Failed to listen for autopaste-clip:', err);
   }
+
+  // Listen for tray quick menu events (REQ-26, Plan 8.1)
+  try {
+    await listen('menu-new-note', () => {
+      createNewNote().catch(console.error);
+    });
+    await listen('menu-select-slot', (payload: unknown) => {
+      const slotIdx = typeof payload === 'number' ? payload : Number(payload);
+      if (!isNaN(slotIdx)) {
+        switchToSlot(slotIdx).catch(console.error);
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to listen for tray menu events:', err);
+  }
 }
 
 // ---------- Note CRUD ----------
@@ -574,6 +744,9 @@ async function switchToSlot(slotIndex: number): Promise<void> {
   if (activateVimMode) {
     vimEngine.onTextLoaded();
   }
+  if (findAndReplaceManager && findAndReplaceManager.isOpen) {
+    findAndReplaceManager.executeSearch();
+  }
 }
 
 async function loadNote(index: number): Promise<void> {
@@ -600,6 +773,9 @@ async function loadNote(index: number): Promise<void> {
   scheduleAnalyze();
   if (activateVimMode) {
     vimEngine.onTextLoaded();
+  }
+  if (findAndReplaceManager && findAndReplaceManager.isOpen) {
+    findAndReplaceManager.executeSearch();
   }
 }
 
@@ -677,12 +853,15 @@ async function createNewNote(): Promise<void> {
   }
 }
 
-async function deleteCurrentNote(): Promise<void> {
+async function deleteCurrentNote(originX?: number, originY?: number): Promise<void> {
   if (!currentId) return;
   if (currentIsSlotted) {
     showStatusMessage('Slotted notes cannot be deleted');
     return;
   }
+  // Wave distortion propagating outward from note drop/delete coordinates
+  voidShader.triggerRipple(originX, originY);
+
   await invoke('delete_note', { id: currentId });
   await loadNotes();
   if (notes.length === 0) {
@@ -690,6 +869,176 @@ async function deleteCurrentNote(): Promise<void> {
   } else {
     await loadNote(Math.min(currentIndex, notes.length - 1));
   }
+}
+
+// ---------- The Void & Trash Lifecycle (REQ-27) ----------
+
+interface TrashEntry {
+  id: string;
+  title: string;
+  deleted_at_ms: number;
+}
+
+function formatRelativeTime(ms: number): string {
+  if (!ms) return 'Unknown date';
+  const now = Date.now();
+  const diffSec = Math.max(0, Math.floor((now - ms) / 1000));
+  if (diffSec < 60) return 'Deleted just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Deleted ${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `Deleted ${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `Deleted ${diffDays}d ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+async function refreshVoidList(): Promise<void> {
+  if (!voidNoteList) return;
+  voidNoteList.innerHTML = '';
+
+  let entries: TrashEntry[] = [];
+  try {
+    entries = await invoke<TrashEntry[]>('list_trash');
+  } catch (err) {
+    console.error('Failed to list trash:', err);
+  }
+
+  if (entries.length === 0) {
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'void-empty-state';
+    emptyEl.innerHTML = `
+      <svg width="32" height="32" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="8" r="6.5"/>
+        <circle cx="8" cy="8" r="3.2"/>
+        <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+      </svg>
+      <div class="void-empty-title">The Void is tranquil and empty</div>
+      <div class="void-empty-desc">Deleted notes will appear here in gravitational stasis.</div>
+    `;
+    voidNoteList.appendChild(emptyEl);
+    return;
+  }
+
+  for (const entry of entries) {
+    const item = document.createElement('div');
+    item.className = 'void-note-item';
+
+    const meta = document.createElement('div');
+    meta.className = 'void-note-meta';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'void-note-title';
+    titleEl.textContent = entry.title || 'Untitled Note';
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'void-note-date';
+    dateEl.textContent = formatRelativeTime(entry.deleted_at_ms);
+
+    meta.appendChild(titleEl);
+    meta.appendChild(dateEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'void-note-actions';
+
+    const btnRestore = document.createElement('button');
+    btnRestore.className = 'btn-restore-note';
+    btnRestore.textContent = 'Restore';
+    btnRestore.title = 'Restore note back to active notes';
+    btnRestore.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await invoke('restore_note', { id: entry.id });
+        showStatusMessage('Note restored from The Void');
+        await loadNotes();
+        await refreshVoidList();
+      } catch (err) {
+        showStatusMessage(`Failed to restore note: ${err}`);
+      }
+    });
+
+    const btnPurge = document.createElement('button');
+    btnPurge.className = 'btn-purge-note';
+    btnPurge.textContent = 'Purge';
+    btnPurge.title = 'Permanently delete from The Void';
+    btnPurge.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const confirmed = window.confirm(
+        `Permanently delete "${entry.title || 'Untitled Note'}" from The Void? This cannot be undone.`
+      );
+      if (confirmed) {
+        try {
+          await invoke('permanently_delete_note', { id: entry.id });
+          showStatusMessage('Note permanently purged');
+          await refreshVoidList();
+        } catch (err) {
+          showStatusMessage(`Failed to purge note: ${err}`);
+        }
+      }
+    });
+
+    actions.appendChild(btnRestore);
+    actions.appendChild(btnPurge);
+
+    item.appendChild(meta);
+    item.appendChild(actions);
+    voidNoteList.appendChild(item);
+  }
+}
+
+function openVoidModal(): void {
+  if (!voidModal) return;
+  voidModal.classList.remove('hidden');
+  voidShader.startAmbient();
+  refreshVoidList().catch(console.error);
+}
+
+function closeVoidModal(): void {
+  if (!voidModal) return;
+  voidModal.classList.add('hidden');
+  if (voidConfirmDialog) {
+    voidConfirmDialog.classList.add('hidden');
+  }
+  voidShader.stopAmbient();
+}
+
+async function handleEmptyVoidClick(): Promise<void> {
+  let entries: TrashEntry[] = [];
+  try {
+    entries = await invoke<TrashEntry[]>('list_trash');
+  } catch (err) {
+    console.error('Failed to list trash:', err);
+  }
+
+  if (entries.length === 0) {
+    showStatusMessage('The Void is already empty');
+    return;
+  }
+
+  if (voidConfirmMsg) {
+    voidConfirmMsg.textContent = `This will permanently delete ${entries.length} notes. There are no turtles beyond The Void.`;
+  }
+  if (voidConfirmDialog) {
+    voidConfirmDialog.classList.remove('hidden');
+  }
+}
+
+async function confirmEmptyVoid(): Promise<void> {
+  if (voidConfirmDialog) {
+    voidConfirmDialog.classList.add('hidden');
+  }
+  // High-energy outward shockwave followed by collapse on Empty The Void
+  voidShader.triggerBurst();
+
+  try {
+    const count = await invoke<number>('purge_void');
+    showStatusMessage(`The Void purged (${count} notes obliterated)`);
+  } catch (err) {
+    showStatusMessage(`Purge error: ${err}`);
+  }
+
+  await refreshVoidList();
+  await loadNotes();
 }
 
 // ---------- Navigation ----------
@@ -821,8 +1170,19 @@ function updateBackdrop(): void {
   const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
 
   let inFencedCode = false;
+  let lineOffset = 0;
 
   const htmlLines = lines.map((line, idx) => {
+    const startOffset = lineOffset;
+    lineOffset += line.length + 1; // +1 for '\n'
+
+    const formatText = (t: string, off: number) => {
+      if (typeof findAndReplaceManager !== 'undefined' && findAndReplaceManager?.isSearching()) {
+        return findAndReplaceManager.formatLineText(t, off);
+      }
+      return escapeHtml(t);
+    };
+
     const trimmed = line.trim();
     const lower = trimmed.toLowerCase();
 
@@ -839,35 +1199,35 @@ function updateBackdrop(): void {
     }
 
     if (inFencedCode) {
-      return `<span class="hl-code-line">${escapeHtml(line)}</span>`;
+      return `<span class="hl-code-line">${formatText(line, startOffset)}</span>`;
     }
 
     // Checked checklist item dimming
     const cbInfo = parseCheckboxLine(line);
     if (cbInfo && cbInfo.isChecked) {
-      return `<span class="checklist-item-checked">${escapeHtml(line)}</span>`;
+      return `<span class="checklist-item-checked">${formatText(line, startOffset)}</span>`;
     }
 
     // Mode keyword on first non-empty line turns green/colored immediately
     if (idx === firstNonEmpty) {
       if (lower === 'math') {
-        return `<span class="hl-mode hl-mode-math">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-math">${formatText(line, startOffset)}</span>`;
       } else if (lower === 'calcs') {
-        return `<span class="hl-mode hl-mode-calcs">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-calcs">${formatText(line, startOffset)}</span>`;
       } else if (lower === 'sum') {
-        return `<span class="hl-mode hl-mode-sum">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-sum">${formatText(line, startOffset)}</span>`;
       } else if (lower === 'list') {
-        return `<span class="hl-mode hl-mode-list">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-list">${formatText(line, startOffset)}</span>`;
       } else if (lower === 'paste') {
-        return `<span class="hl-mode hl-mode-paste">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-paste">${formatText(line, startOffset)}</span>`;
       } else if (lower === 'code' || lower.startsWith('code:')) {
-        return `<span class="hl-mode hl-mode-code">${escapeHtml(line)}</span>`;
+        return `<span class="hl-mode hl-mode-code">${formatText(line, startOffset)}</span>`;
       }
     }
 
     // Comment lines (// ...)
     if (trimmed.startsWith('//')) {
-      return `<span class="hl-comment">${escapeHtml(line)}</span>`;
+      return `<span class="hl-comment">${formatText(line, startOffset)}</span>`;
     }
 
     // Natural-language trigger keywords anywhere in note
@@ -877,7 +1237,7 @@ function updateBackdrop(): void {
     ];
     const firstWord = lower.split(/[\s:]/)[0];
     if (triggerKws.includes(firstWord)) {
-      return `<span class="hl-mode hl-mode-trigger hl-mode-${firstWord}">${escapeHtml(line)}</span>`;
+      return `<span class="hl-mode hl-mode-trigger hl-mode-${firstWord}">${formatText(line, startOffset)}</span>`;
     }
 
     // Variable / label lines: e.g. "trees: 23,405" or "rent = 12000"
@@ -887,11 +1247,11 @@ function updateBackdrop(): void {
       const label = line.substring(0, colonIdx);
       if (label.trim().length > 0 && label.trim().split(/\s+/).length <= 4) {
         const rest = line.substring(colonIdx + 1);
-        return `<span class="hl-var">${escapeHtml(label)}</span><span class="hl-punct">:</span>${escapeHtml(rest)}`;
+        return `<span class="hl-var">${formatText(label, startOffset)}</span><span class="hl-punct">:</span>${formatText(rest, startOffset + colonIdx + 1)}`;
       }
     }
 
-    return escapeHtml(line);
+    return formatText(line, startOffset);
   });
 
   let resultHtml = htmlLines.join('\n');
@@ -1789,9 +2149,17 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
-  // Esc → stop autopaste first if active, otherwise hide window
+  // Esc → close void confirmation dialog or void modal first, then autopaste, then hide window
   if (e.key === 'Escape') {
     e.preventDefault();
+    if (voidConfirmDialog && !voidConfirmDialog.classList.contains('hidden')) {
+      voidConfirmDialog.classList.add('hidden');
+      return;
+    }
+    if (voidModal && !voidModal.classList.contains('hidden')) {
+      closeVoidModal();
+      return;
+    }
     if (isAutoPasteActive) {
       stopAutoPaste().catch(console.error);
       return;
@@ -1987,6 +2355,16 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
     exportNote();
   }
 
+  // Ctrl+Shift+T → toggle The Void / Trash modal
+  if (e.ctrlKey && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+    e.preventDefault();
+    if (voidModal && !voidModal.classList.contains('hidden')) {
+      closeVoidModal();
+    } else {
+      openVoidModal();
+    }
+  }
+
   // Ctrl+P → toggle plain mode
   if (e.ctrlKey && e.key === 'p') {
     e.preventDefault();
@@ -1996,13 +2374,60 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
 
 // Global hotkeys (direct slot jumps Ctrl+1..9, cycle navigation Ctrl+Tab)
 window.addEventListener('keydown', (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && isAutoPasteActive) {
-    e.preventDefault();
-    stopAutoPaste().catch(console.error);
-    return;
+  if (e.key === 'Escape') {
+    if (exportManager && exportManager.isOpen) {
+      e.preventDefault();
+      exportManager.close();
+      return;
+    }
+    if (findAndReplaceManager && findAndReplaceManager.isOpen) {
+      e.preventDefault();
+      findAndReplaceManager.close();
+      return;
+    }
+    if (voidConfirmDialog && !voidConfirmDialog.classList.contains('hidden')) {
+      e.preventDefault();
+      voidConfirmDialog.classList.add('hidden');
+      return;
+    }
+    if (voidModal && !voidModal.classList.contains('hidden')) {
+      e.preventDefault();
+      closeVoidModal();
+      return;
+    }
+    if (isAutoPasteActive) {
+      e.preventDefault();
+      stopAutoPaste().catch(console.error);
+      return;
+    }
   }
 
   const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+
+  // Export Menu: Ctrl+Shift+E / Cmd+Shift+E
+  if (isCtrlOrMeta && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+    e.preventDefault();
+    exportManager.toggle(currentId, editor.value);
+    return;
+  }
+
+  // Find & Replace: Ctrl+F / Cmd+F
+  if (isCtrlOrMeta && !e.shiftKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+    e.preventDefault();
+    findAndReplaceManager.open();
+    return;
+  }
+
+  // Global Ctrl+Shift+T → toggle The Void
+  if (isCtrlOrMeta && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+    e.preventDefault();
+    if (voidModal && !voidModal.classList.contains('hidden')) {
+      closeVoidModal();
+    } else {
+      openVoidModal();
+    }
+    return;
+  }
 
   // Direct slot jump: Ctrl+1 through Ctrl+9
   if (isCtrlOrMeta && !e.shiftKey && !e.altKey && e.key >= '1' && e.key <= '9') {
@@ -2039,8 +2464,26 @@ document.addEventListener('keyup', (e) => {
 btnPrev.addEventListener('click', () => prevNote());
 btnNext.addEventListener('click', () => nextNote());
 btnNew.addEventListener('click', () => createNewNote());
-btnDelete.addEventListener('click', () => deleteCurrentNote());
-btnExport.addEventListener('click', () => exportNote());
+btnDelete.addEventListener('click', (e: MouseEvent) => deleteCurrentNote(e.clientX, e.clientY));
+btnSearch?.addEventListener('click', () => findAndReplaceManager.toggle());
+btnVoid?.addEventListener('click', () => {
+  if (voidModal && !voidModal.classList.contains('hidden')) {
+    closeVoidModal();
+  } else {
+    openVoidModal();
+  }
+});
+btnCloseVoid?.addEventListener('click', () => closeVoidModal());
+voidModalBackdrop?.addEventListener('click', () => closeVoidModal());
+btnEmptyVoid?.addEventListener('click', () => handleEmptyVoidClick().catch(console.error));
+btnCancelEmptyVoid?.addEventListener('click', () => {
+  if (voidConfirmDialog) voidConfirmDialog.classList.add('hidden');
+});
+voidConfirmBackdrop?.addEventListener('click', () => {
+  if (voidConfirmDialog) voidConfirmDialog.classList.add('hidden');
+});
+btnConfirmEmptyVoid?.addEventListener('click', () => confirmEmptyVoid().catch(console.error));
+btnExport.addEventListener('click', () => exportManager.toggle(currentId, editor.value));
 btnSettings.addEventListener('click', () => {
   invoke('open_settings_window').catch(console.error);
 });

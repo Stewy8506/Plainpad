@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- Full-bleed WebGL / Canvas 2D shader surface for The Void -->
+  <canvas id="void-canvas" class="void-canvas hidden"></canvas>
+
   <!-- Top chrome bar: note navigation, drag region & window controls -->
   <div id="top-bar" class="chrome-bar" data-tauri-drag-region>
     <div class="chrome-group">
@@ -42,6 +45,47 @@
     <div id="editor-mirror" aria-hidden="true"></div>
     <!-- Overlay for annotations (math results, chips, checkboxes) -->
     <div id="editor-overlay" aria-hidden="true"></div>
+
+    <!-- Find & Replace Floating Card (#find-replace-container) -->
+    <div id="find-replace-container" class="find-replace-card hidden" role="search" aria-label="Find and Replace">
+      <div class="find-row find-row-inputs">
+        <div class="search-input-group">
+          <input type="text" id="search-input" class="search-input" placeholder="Find" autocomplete="off" spellcheck="false" />
+          <span id="search-match-count" class="search-match-count">0/0</span>
+        </div>
+        <select id="search-match-type" class="search-select" title="Match Criteria">
+          <option value="contains" selected>Contains</option>
+          <option value="starts_with">Starts With</option>
+          <option value="ends_with">Ends With</option>
+          <option value="exact_match">Exact Match</option>
+        </select>
+        <button id="btn-search-case" class="search-toggle-btn" type="button" title="Match Case (Alt+C)">Aa</button>
+        <button id="btn-search-regex" class="search-toggle-btn" type="button" title="Use Regular Expression (Alt+R)">.*</button>
+        <div class="search-scope-group">
+          <button id="btn-search-scope-note" class="search-scope-btn active" type="button" title="Search Current Note">Note</button>
+          <button id="btn-search-scope-all" class="search-scope-btn" type="button" title="Search All Notes">All</button>
+        </div>
+        <div class="search-nav-group">
+          <button id="btn-search-prev" class="search-nav-btn" type="button" title="Previous Match (Shift+Enter)">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 10 8 6 12 10"/></svg>
+          </button>
+          <button id="btn-search-next" class="search-nav-btn" type="button" title="Next Match (Enter)">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 6 8 10 12 6"/></svg>
+          </button>
+        </div>
+        <button id="btn-search-close" class="search-close-btn" type="button" title="Close (Esc)">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="find-row find-row-replace" id="find-replace-row">
+        <input type="text" id="replace-input" class="replace-input" placeholder="Replace" autocomplete="off" spellcheck="false" />
+        <button id="btn-replace-one" class="search-btn" type="button" title="Replace">Replace</button>
+        <button id="btn-replace-all" class="search-btn" type="button" title="Replace All">Replace All</button>
+      </div>
+      <div id="search-results-list" class="search-results-list hidden">
+        <!-- Multi-note search results rendered dynamically -->
+      </div>
+    </div>
   </div>
 
   <!-- Timer display (shown when timers are active) -->
@@ -58,6 +102,8 @@
   <div id="bottom-bar" class="chrome-bar">
     <button id="btn-new" class="chrome-btn" title="New note (Ctrl+N)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg></button>
     <button id="btn-delete" class="chrome-btn" title="Delete note (Ctrl+Shift+D)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10M5.5 4.5V3a1 1 0 011-1h3a1 1 0 011 1v1.5m-6.5 0v8a1.5 1.5 0 001.5 1.5h4a1.5 1.5 0 001.5-1.5v-8"/></svg></button>
+    <button id="btn-search" class="chrome-btn" title="Find & Replace (Ctrl+F)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg></button>
+    <button id="btn-void" class="chrome-btn" title="The Void / Trashed Notes (Ctrl+Shift+T)"><svg class="icon-void" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg></button>
     <button id="btn-export" class="chrome-btn" title="Export (Ctrl+Shift+E)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v9M4.5 6L8 2.5 11.5 6M2.5 11.5v2a1 1 0 001 1h9a1 1 0 001-1v-2"/></svg></button>
     <div id="slotted-bar" class="slotted-bar"></div>
     <div class="bar-spacer"></div>
@@ -76,6 +122,109 @@
       <div class="timer-alert-actions">
         <button id="timer-alert-action-btn" class="timer-alert-btn-primary" type="button">Start Break</button>
         <button id="timer-alert-dismiss-btn" class="timer-alert-btn-dismiss" type="button">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- The Void View Modal (#void-modal / #trash-modal) -->
+  <div id="void-modal" class="void-modal hidden" role="dialog" aria-modal="true" aria-labelledby="void-modal-title">
+    <div class="void-backdrop" id="void-modal-backdrop"></div>
+    <div class="void-container">
+      <div class="void-header">
+        <div class="void-header-info">
+          <h2 id="void-modal-title" class="void-title">
+            <svg class="void-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.2"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+            </svg>
+            The Void
+          </h2>
+          <p class="void-subtitle">Soft-deleted notes resting in gravitational stasis</p>
+        </div>
+        <div class="void-actions">
+          <button id="btn-empty-void" class="void-btn void-btn-danger" type="button" title="Empty The Void">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4m-6.5 0v8.5a1.5 1.5 0 001.5 1.5h4a1.5 1.5 0 001.5-1.5V4"/>
+            </svg>
+            Empty The Void
+          </button>
+          <button id="btn-close-void" class="void-btn void-btn-close" type="button" title="Close (Esc)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M4 4l8 8M12 4l-8 8"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="void-note-list" class="void-note-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Permanent Purge Confirmation Dialog (#void-confirm-dialog) -->
+  <div id="void-confirm-dialog" class="void-confirm-dialog hidden" role="alertdialog" aria-modal="true" aria-labelledby="void-confirm-headline">
+    <div class="void-dialog-backdrop" id="void-confirm-backdrop"></div>
+    <div class="void-dialog-card">
+      <div class="void-dialog-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff5370" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <h3 id="void-confirm-headline" class="void-dialog-headline">Empty The Void?</h3>
+      <p id="void-confirm-message" class="void-dialog-message">This will permanently delete %lld notes. There are no turtles beyond The Void.</p>
+      <div class="void-dialog-actions">
+        <button id="btn-cancel-empty-void" class="void-dialog-btn void-dialog-btn-cancel" type="button">Cancel</button>
+        <button id="btn-confirm-empty-void" class="void-dialog-btn void-dialog-btn-confirm" type="button">Empty The Void</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal (#export-modal) -->
+  <div id="export-modal" class="export-modal hidden" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+    <div class="export-backdrop" id="export-modal-backdrop"></div>
+    <div class="export-container">
+      <div class="export-header">
+        <h3 id="export-modal-title" class="export-title">Export Note</h3>
+        <button id="btn-close-export" class="export-btn-close" type="button" title="Close (Esc)">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="export-menu-list">
+        <button class="export-menu-item" type="button" data-target="txt">
+          <span class="export-item-icon">📄</span>
+          <span class="export-item-label">Plain Text (.txt)</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="md">
+          <span class="export-item-icon">📝</span>
+          <span class="export-item-label">Markdown (.md)</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="obsidian">
+          <span class="export-item-icon">💎</span>
+          <span class="export-item-label" id="export-label-obsidian">Obsidian</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="bear">
+          <span class="export-item-icon">🐻</span>
+          <span class="export-item-label">Bear</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="apple_notes">
+          <span class="export-item-icon">🍎</span>
+          <span class="export-item-label">Apple Notes</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="notion">
+          <span class="export-item-icon">📓</span>
+          <span class="export-item-label">Notion</span>
+        </button>
+        <button class="export-menu-item" type="button" data-target="custom">
+          <span class="export-item-icon">⚡</span>
+          <span class="export-item-label" id="export-label-custom">Custom URL Scheme</span>
+        </button>
+        <div class="export-separator"></div>
+        <button class="export-menu-item export-menu-item-bulk" type="button" data-target="zip">
+          <span class="export-item-icon">📦</span>
+          <span class="export-item-label">Export All Notes as ZIP (.zip)</span>
+        </button>
       </div>
     </div>
   </div>

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{
     image::Image,
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, WebviewWindowBuilder,
 };
@@ -174,6 +174,19 @@ fn purge_void(state: tauri::State<'_, Mutex<AppState>>) -> Result<usize, String>
         .unwrap()
         .store
         .purge_void()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn permanently_delete_note(
+    id: String,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .permanently_delete_note(&id)
         .map_err(|e| e.to_string())
 }
 
@@ -348,6 +361,106 @@ fn export_file_name(text: String, kind: String) -> String {
         _ => plainpad_core::export::ExportKind::Txt,
     };
     plainpad_core::export::export_file_name(&text, k)
+}
+
+#[tauri::command]
+fn export_note_to_target(
+    id: String,
+    target: String,
+    options: plainpad_core::export::ExportOptions,
+    vault: Option<String>,
+    custom_template: Option<String>,
+    database_name: Option<String>,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<String, String> {
+    let s = state.lock().unwrap();
+    let note = s
+        .store
+        .load_note(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Note {id} not found"))?;
+
+    let (title, body) = plainpad_core::export::extract_title_and_body(
+        &note.content,
+        options.use_first_line_as_title,
+    );
+    let processed_body = if options.omit_keywords {
+        plainpad_core::export::omit_keywords_from_text(&body)
+    } else {
+        body
+    };
+
+    match target.to_lowercase().as_str() {
+        "txt" | "plaintext" => Ok(processed_body),
+        "md" | "markdown" => Ok(plainpad_core::export::to_markdown_with_options(
+            &note.content,
+            &options,
+        )),
+        "obsidian" => {
+            let v = vault.unwrap_or_else(|| "Notes".to_string());
+            let content = if options.convert_to_markdown {
+                plainpad_core::export::to_markdown_with_options(&processed_body, &options)
+            } else {
+                processed_body
+            };
+            Ok(plainpad_core::export::format_obsidian_uri(&v, &title, &content))
+        }
+        "bear" => {
+            let content = if options.convert_to_markdown {
+                plainpad_core::export::to_markdown_with_options(&processed_body, &options)
+            } else {
+                processed_body
+            };
+            Ok(plainpad_core::export::format_bear_uri(&title, &content))
+        }
+        "apple_notes" | "applenotes" => {
+            Ok(plainpad_core::export::format_apple_notes(&title, &processed_body, &options))
+        }
+        "notion" => {
+            Ok(plainpad_core::export::format_notion(&title, &processed_body, database_name.as_deref()))
+        }
+        "custom" => {
+            let template = custom_template.unwrap_or_else(|| {
+                "myapp://create?title={TITLE}&text={CONTENT}&date={DATE}".to_string()
+            });
+            Ok(plainpad_core::export::format_custom_url(
+                &template,
+                &title,
+                &processed_body,
+                chrono::Utc::now(),
+            ))
+        }
+        other => Err(format!("Unknown export target: {other}")),
+    }
+}
+
+#[tauri::command]
+fn export_all_notes_zip(
+    options: plainpad_core::export::ExportOptions,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Vec<u8>, String> {
+    let s = state.lock().unwrap();
+    let mut notes = s.store.list_active_notes().map_err(|e| e.to_string())?;
+    if let Ok(slotted) = s.store.list_slotted_notes() {
+        notes.extend(slotted);
+    }
+    plainpad_core::export::export_all_to_zip(&notes, &options)
+}
+
+#[tauri::command]
+fn resolve_custom_url(text: String, template: String) -> String {
+    let title = plainpad_core::title_from_text(&text);
+    plainpad_core::export::format_custom_url(&template, &title, &text, chrono::Utc::now())
+}
+
+#[tauri::command]
+fn get_all_notes(state: tauri::State<'_, Mutex<AppState>>) -> Vec<plainpad_core::Note> {
+    let s = state.lock().unwrap();
+    let mut notes = s.store.list_active_notes().unwrap_or_default();
+    if let Ok(slotted) = s.store.list_slotted_notes() {
+        notes.extend(slotted);
+    }
+    notes
 }
 
 fn pause_timer_if_configured(app: &AppHandle) {
@@ -698,6 +811,10 @@ fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>
         let _ = s
             .store
             .set_setting("always_on_top", serde_json::Value::Bool(new_val));
+        let _ = s
+            .store
+            .set_setting("_lastPinState", serde_json::Value::Bool(new_val));
+        let _ = app.emit("setting-changed", serde_json::json!({ "key": "always_on_top", "value": new_val }));
         Ok(new_val)
     } else {
         Err("window not found".into())
@@ -705,7 +822,12 @@ fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>
 }
 
 #[tauri::command]
-fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
+fn get_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>) -> bool {
+    if let Some(w) = app.get_webview_window("main") {
+        if let Ok(pinned) = w.is_always_on_top() {
+            return pinned;
+        }
+    }
     state
         .lock()
         .unwrap()
@@ -715,6 +837,52 @@ fn get_always_on_top(state: tauri::State<'_, Mutex<AppState>>) -> bool {
         .flatten()
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+fn register_hotkey_internal(app: &AppHandle, hotkey_str: &str) -> Result<tauri_plugin_global_shortcut::Shortcut, String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    let parsed: Shortcut = hotkey_str
+        .parse()
+        .map_err(|e| format!("Failed to parse hotkey '{hotkey_str}': {e}"))?;
+
+    let _ = app.global_shortcut().unregister_all();
+
+    let hotkey_handle = app.clone();
+    app.global_shortcut()
+        .on_shortcut(parsed.clone(), move |_app, _shortcut, _event| {
+            if let Some(w) = hotkey_handle.get_webview_window("main") {
+                let is_vis = w.is_visible().unwrap_or(false);
+                let is_foc = w.is_focused().unwrap_or(false);
+                if is_vis && is_foc {
+                    pause_timer_if_configured(&hotkey_handle);
+                    w.hide().ok();
+                } else {
+                    w.show().ok();
+                    w.unminimize().ok();
+                    w.set_focus().ok();
+                }
+            }
+        })
+        .map_err(|e| format!("Failed to register shortcut '{hotkey_str}': {e}"))?;
+    Ok(parsed)
+}
+
+#[tauri::command]
+fn register_global_hotkey(
+    app: AppHandle,
+    state: tauri::State<'_, Mutex<AppState>>,
+    hotkey: String,
+) -> Result<(), String> {
+    let clean_hotkey = hotkey.trim();
+    if clean_hotkey.is_empty() {
+        return Err("Hotkey cannot be empty".into());
+    }
+    register_hotkey_internal(&app, clean_hotkey)?;
+    let s = state.lock().unwrap();
+    let _ = s.store.set_setting("globalHotkey", serde_json::Value::String(clean_hotkey.to_string()));
+    let _ = s.store.set_setting("global_hotkey", serde_json::Value::String(clean_hotkey.to_string()));
+    let _ = app.emit("setting-changed", serde_json::json!({ "key": "globalHotkey", "value": clean_hotkey }));
+    Ok(())
 }
 
 #[tauri::command]
@@ -1128,15 +1296,35 @@ fn main() {
             let x = geo.get("x").and_then(|v| v.as_f64());
             let y = geo.get("y").and_then(|v| v.as_f64());
 
-            let is_pinned = state
+            let restore_pin = state
                 .lock()
                 .unwrap()
                 .store
-                .get_setting("always_on_top")
+                .get_setting("restorePinOnOpen")
                 .ok()
                 .flatten()
+                .or_else(|| state.lock().unwrap().store.get_setting("restore_pin").ok().flatten())
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+
+            let is_pinned = if restore_pin {
+                state
+                    .lock()
+                    .unwrap()
+                    .store
+                    .get_setting("_lastPinState")
+                    .ok()
+                    .flatten()
+                    .or_else(|| state.lock().unwrap().store.get_setting("always_on_top").ok().flatten())
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            if !restore_pin {
+                let _ = state.lock().unwrap().store.set_setting("always_on_top", serde_json::Value::Bool(false));
+            }
 
             let is_transparent = if cfg!(target_os = "linux") {
                 std::env::var("PLAINPAD_TRANSPARENT").map(|v| v == "1" || v == "true").unwrap_or(false)
@@ -1164,12 +1352,38 @@ fn main() {
             let icon_bytes = include_bytes!("../icons/icon.png");
             let icon = Image::from_bytes(icon_bytes).expect("icon.png");
 
-            let show_item = MenuItemBuilder::with_id("show", "Show").build(app)?;
-            let hide_item = MenuItemBuilder::with_id("hide", "Hide").build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let show_item = MenuItemBuilder::with_id("show", "Show Plainpad").build(app)?;
+            let hide_item = MenuItemBuilder::with_id("hide", "Hide Plainpad").build(app)?;
+            let new_note_item = MenuItemBuilder::with_id("new_note", "New Note").build(app)?;
+
+            let mut slots_sub = SubmenuBuilder::new(app, "Slotted Notes");
+            let slot_names = [
+                ("slot_0", "1: Hermes"),
+                ("slot_1", "2: Apollo"),
+                ("slot_2", "3: Ares"),
+                ("slot_3", "4: Athena"),
+                ("slot_4", "5: Poseidon"),
+                ("slot_5", "6: Demeter"),
+                ("slot_6", "7: Hephaestus"),
+                ("slot_7", "8: Artemis"),
+                ("slot_8", "9: Zeus"),
+            ];
+            for (id, label) in &slot_names {
+                let item = MenuItemBuilder::with_id(*id, *label).build(app)?;
+                slots_sub = slots_sub.item(&item);
+            }
+            let slots_submenu = slots_sub.build()?;
+
+            let settings_item = MenuItemBuilder::with_id("settings", "Settings...").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit Plainpad").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&show_item)
                 .item(&hide_item)
+                .separator()
+                .item(&new_note_item)
+                .item(&slots_submenu)
+                .separator()
+                .item(&settings_item)
                 .separator()
                 .item(&quit_item)
                 .build()?;
@@ -1184,6 +1398,7 @@ fn main() {
                         "show" => {
                             if let Some(w) = tray_handle.get_webview_window("main") {
                                 w.show().ok();
+                                w.unminimize().ok();
                                 w.set_focus().ok();
                             }
                         }
@@ -1193,8 +1408,32 @@ fn main() {
                                 w.hide().ok();
                             }
                         }
+                        "new_note" => {
+                            if let Some(w) = tray_handle.get_webview_window("main") {
+                                w.show().ok();
+                                w.unminimize().ok();
+                                w.set_focus().ok();
+                                let _ = w.emit("menu-new-note", ());
+                            }
+                        }
+                        "settings" => {
+                            let h = tray_handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = open_settings_window(h).await;
+                            });
+                        }
                         "quit" => {
                             std::process::exit(0);
+                        }
+                        id if id.starts_with("slot_") => {
+                            if let Ok(slot_idx) = id.strip_prefix("slot_").unwrap_or("0").parse::<usize>() {
+                                if let Some(w) = tray_handle.get_webview_window("main") {
+                                    w.show().ok();
+                                    w.unminimize().ok();
+                                    w.set_focus().ok();
+                                    let _ = w.emit("menu-select-slot", slot_idx);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1204,22 +1443,19 @@ fn main() {
                 eprintln!("[Tray] Warning: System tray could not be initialized: {e}");
             }
 
-            // Global hotkey (Alt+A)
-            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
-            let shortcut = Shortcut::new(Some(Modifiers::ALT), Code::KeyA);
-            let hotkey_handle = handle.clone();
-            if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                if let Some(w) = hotkey_handle.get_webview_window("main") {
-                    if w.is_visible().unwrap_or(false) {
-                        pause_timer_if_configured(&hotkey_handle);
-                        w.hide().ok();
-                    } else {
-                        w.show().ok();
-                        w.set_focus().ok();
-                    }
-                }
-            }) {
-                eprintln!("[Hotkey] Warning: Could not register global shortcut: {e}");
+            // Global hotkey initialized from settings (default "Ctrl+Space")
+            let hotkey_str = {
+                let s = state.lock().unwrap();
+                s.store
+                    .get_setting("globalHotkey")
+                    .ok()
+                    .flatten()
+                    .or_else(|| s.store.get_setting("global_hotkey").ok().flatten())
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "Ctrl+Space".to_string())
+            };
+            if let Err(e) = register_hotkey_internal(&handle, &hotkey_str) {
+                eprintln!("[Hotkey] Warning: Could not register global shortcut '{hotkey_str}': {e}");
             }
 
             // Fire overdue timers (expired while app was closed)
@@ -1323,6 +1559,10 @@ fn main() {
             analyze_note,
             export_note,
             export_file_name,
+            export_note_to_target,
+            export_all_notes_zip,
+            resolve_custom_url,
+            get_all_notes,
             start_timer,
             start_timer_phrase,
             pause_timer,
@@ -1359,6 +1599,7 @@ fn main() {
             is_autostart_enabled,
             set_autostart,
             purge_void,
+            permanently_delete_note,
             set_locked,
             set_archived,
             set_private,
@@ -1381,7 +1622,22 @@ fn main() {
             get_extension_preference,
             set_extension_preference,
             fetch_ai_models,
+            register_global_hotkey,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");
+}
+
+#[cfg(test)]
+mod tests {
+    use tauri_plugin_global_shortcut::Shortcut;
+
+    #[test]
+    fn test_parse_shortcuts() {
+        assert!("Ctrl+Space".parse::<Shortcut>().is_ok());
+        println!("Cmd+Space: {:?}", "Cmd+Space".parse::<Shortcut>());
+        println!("Command+Space: {:?}", "Command+Space".parse::<Shortcut>());
+        println!("Super+Space: {:?}", "Super+Space".parse::<Shortcut>());
+        println!("Shift+Ctrl+Space: {:?}", "Shift+Ctrl+Space".parse::<Shortcut>());
+    }
 }

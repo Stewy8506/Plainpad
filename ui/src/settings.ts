@@ -70,6 +70,10 @@ const rngDimming = document.getElementById('setting-dimming') as HTMLInputElemen
 const badgeDimming = document.getElementById('dimming-val') as HTMLElement;
 const rngWindowOpacity = document.getElementById('setting-window-opacity') as HTMLInputElement;
 const badgeWindowOpacity = document.getElementById('window-opacity-val') as HTMLElement;
+const selGridOverlay = document.getElementById('setting-grid-overlay') as HTMLSelectElement | null;
+const chkSolidBars = document.getElementById('setting-solid-bars') as HTMLInputElement | null;
+const inputGlobalHotkey = document.getElementById('setting-global-hotkey') as HTMLInputElement | null;
+const btnSaveHotkey = document.getElementById('btn-save-hotkey') as HTMLButtonElement | null;
 
 // Editor
 const chkDefaultPlain = document.getElementById('setting-default-plain') as HTMLInputElement;
@@ -169,6 +173,26 @@ const btnRefreshModels = document.getElementById('btn-refresh-models') as HTMLBu
 const selExtPrefOpenaiModel = document.getElementById('ext-pref-openai-model') as HTMLSelectElement | null;
 const txtExtPrefOpenaiSystemPrompt = document.getElementById('ext-pref-openai-systemPrompt') as HTMLTextAreaElement | null;
 
+// Export
+const chkExportFirstLineTitle = document.getElementById('setting-export-first-line-title') as HTMLInputElement | null;
+const chkExportOmitKeywords = document.getElementById('setting-export-omit-keywords') as HTMLInputElement | null;
+const chkExportPlainTextEnabled = document.getElementById('setting-export-plain-text-enabled') as HTMLInputElement | null;
+const chkExportMarkdownEnabled = document.getElementById('setting-export-markdown-enabled') as HTMLInputElement | null;
+const chkExportObsidianEnabled = document.getElementById('setting-export-obsidian-enabled') as HTMLInputElement | null;
+const txtExportObsidianVault = document.getElementById('setting-export-obsidian-vault') as HTMLInputElement | null;
+const chkExportObsidianConvertMarkdown = document.getElementById('setting-export-obsidian-convert-markdown') as HTMLInputElement | null;
+const chkExportBearEnabled = document.getElementById('setting-export-bear-enabled') as HTMLInputElement | null;
+const chkExportBearConvertMarkdown = document.getElementById('setting-export-bear-convert-markdown') as HTMLInputElement | null;
+const chkExportAppleNotesEnabled = document.getElementById('setting-export-apple-notes-enabled') as HTMLInputElement | null;
+const chkExportAppleNotesRichText = document.getElementById('setting-export-apple-notes-rich-text') as HTMLInputElement | null;
+const chkExportNotionEnabled = document.getElementById('setting-export-notion-enabled') as HTMLInputElement | null;
+const chkExportNotionSaveDatabase = document.getElementById('setting-export-notion-save-database') as HTMLInputElement | null;
+const txtExportNotionDatabaseName = document.getElementById('setting-export-notion-database-name') as HTMLInputElement | null;
+const chkExportCustomEnabled = document.getElementById('setting-export-custom-enabled') as HTMLInputElement | null;
+const txtExportCustomName = document.getElementById('setting-export-custom-name') as HTMLInputElement | null;
+const txtExportCustomURLTemplate = document.getElementById('setting-export-custom-url-template') as HTMLInputElement | null;
+const btnSettingsExportZip = document.getElementById('btn-settings-export-zip') as HTMLButtonElement | null;
+
 // ---------- Tab Switching ----------
 
 function setupTabs(): void {
@@ -218,8 +242,12 @@ async function loadSettings(): Promise<void> {
   if (chkHideOnBlur && settings.hide_on_blur !== undefined) {
     chkHideOnBlur.checked = !!settings.hide_on_blur;
   }
-  if (chkRestorePin && settings.restore_pin !== undefined) {
-    chkRestorePin.checked = !!settings.restore_pin;
+  if (chkRestorePin) {
+    if (settings.restorePinOnOpen !== undefined) {
+      chkRestorePin.checked = !!settings.restorePinOnOpen;
+    } else if (settings.restore_pin !== undefined) {
+      chkRestorePin.checked = !!settings.restore_pin;
+    }
   }
   if (chkSwipeNav && settings.swipe_nav !== undefined) {
     chkSwipeNav.checked = !!settings.swipe_nav;
@@ -252,6 +280,24 @@ async function loadSettings(): Promise<void> {
   if (rngWindowOpacity && settings.window_opacity !== undefined) {
     rngWindowOpacity.value = String(settings.window_opacity);
     if (badgeWindowOpacity) badgeWindowOpacity.textContent = `${settings.window_opacity}%`;
+  }
+
+  // Canvas & Window Chrome
+  if (selGridOverlay) {
+    const gridMode = String(settings.gridOverlayMode || settings.grid_overlay || 'none');
+    selGridOverlay.value = gridMode;
+  }
+  if (chkSolidBars) {
+    const solid = settings.solidBarsInTransparencyMode !== undefined
+      ? !!settings.solidBarsInTransparencyMode
+      : (settings.solid_bars !== undefined ? !!settings.solid_bars : (settings._solidBarsInTransparencyMode !== undefined ? !!settings._solidBarsInTransparencyMode : false));
+    chkSolidBars.checked = solid;
+  }
+
+  // Global Hotkey
+  if (inputGlobalHotkey) {
+    const hotkey = String(settings.globalHotkey || settings.global_hotkey || 'Ctrl+Space');
+    inputGlobalHotkey.value = hotkey;
   }
 
   // Editor
@@ -450,6 +496,59 @@ async function loadApiKeysAndExtensions(settings: Record<string, unknown>): Prom
     } catch {
       // Ignore
     }
+
+    // Export Settings
+    if (chkExportFirstLineTitle && settings.exportGeneralUseFirstLineAsTitle !== undefined) {
+      chkExportFirstLineTitle.checked = !!settings.exportGeneralUseFirstLineAsTitle;
+    }
+    if (chkExportOmitKeywords && settings.exportGeneralOmitKeyword !== undefined) {
+      chkExportOmitKeywords.checked = !!settings.exportGeneralOmitKeyword;
+    }
+    if (chkExportPlainTextEnabled && settings.exportPlainTextEnabled !== undefined) {
+      chkExportPlainTextEnabled.checked = !!settings.exportPlainTextEnabled;
+    }
+    if (chkExportMarkdownEnabled && settings.exportMarkdownEnabled !== undefined) {
+      chkExportMarkdownEnabled.checked = !!settings.exportMarkdownEnabled;
+    }
+    if (chkExportObsidianEnabled && settings.exportObsidianEnabled !== undefined) {
+      chkExportObsidianEnabled.checked = !!settings.exportObsidianEnabled;
+    }
+    if (txtExportObsidianVault && settings.exportObsidianVault !== undefined) {
+      txtExportObsidianVault.value = String(settings.exportObsidianVault);
+    }
+    if (chkExportObsidianConvertMarkdown && settings.exportObsidianConvertToMarkdown !== undefined) {
+      chkExportObsidianConvertMarkdown.checked = !!settings.exportObsidianConvertToMarkdown;
+    }
+    if (chkExportBearEnabled && settings.exportBearEnabled !== undefined) {
+      chkExportBearEnabled.checked = !!settings.exportBearEnabled;
+    }
+    if (chkExportBearConvertMarkdown && settings.exportBearConvertToMarkdown !== undefined) {
+      chkExportBearConvertMarkdown.checked = !!settings.exportBearConvertToMarkdown;
+    }
+    if (chkExportAppleNotesEnabled && settings.exportAppleNotesEnabled !== undefined) {
+      chkExportAppleNotesEnabled.checked = !!settings.exportAppleNotesEnabled;
+    }
+    if (chkExportAppleNotesRichText && settings.exportAppleNotesConvertToRichText !== undefined) {
+      chkExportAppleNotesRichText.checked = !!settings.exportAppleNotesConvertToRichText;
+    }
+    if (chkExportNotionEnabled && settings.exportNotionEnabled !== undefined) {
+      chkExportNotionEnabled.checked = !!settings.exportNotionEnabled;
+    }
+    if (chkExportNotionSaveDatabase && settings.exportNotionSaveInDatabase !== undefined) {
+      chkExportNotionSaveDatabase.checked = !!settings.exportNotionSaveInDatabase;
+    }
+    if (txtExportNotionDatabaseName && settings.exportNotionDatabaseName !== undefined) {
+      txtExportNotionDatabaseName.value = String(settings.exportNotionDatabaseName);
+    }
+    if (chkExportCustomEnabled && settings.exportCustomEnabled !== undefined) {
+      chkExportCustomEnabled.checked = !!settings.exportCustomEnabled;
+    }
+    if (txtExportCustomName && settings.exportCustomName !== undefined) {
+      txtExportCustomName.value = String(settings.exportCustomName);
+    }
+    if (txtExportCustomURLTemplate && settings.exportCustomURLTemplate !== undefined) {
+      txtExportCustomURLTemplate.value = String(settings.exportCustomURLTemplate);
+    }
   } catch (err) {
     console.error('Failed to load API keys or extension preferences:', err);
   }
@@ -554,7 +653,10 @@ function wireEvents(): void {
   chkStartNewNote?.addEventListener('change', () => saveSetting('start_new_note', chkStartNewNote.checked));
   selTrayMode?.addEventListener('change', () => saveSetting('tray_mode', selTrayMode.value));
   chkHideOnBlur?.addEventListener('change', () => saveSetting('hide_on_blur', chkHideOnBlur.checked));
-  chkRestorePin?.addEventListener('change', () => saveSetting('restore_pin', chkRestorePin.checked));
+  chkRestorePin?.addEventListener('change', () => {
+    saveSetting('restore_pin', chkRestorePin.checked);
+    saveSetting('restorePinOnOpen', chkRestorePin.checked);
+  });
   chkSwipeNav?.addEventListener('change', () => saveSetting('swipe_nav', chkSwipeNav.checked));
   rngSwipeSensitivity?.addEventListener('input', () => {
     if (badgeSwipeSensitivity) badgeSwipeSensitivity.textContent = rngSwipeSensitivity.value;
@@ -582,6 +684,38 @@ function wireEvents(): void {
   rngWindowOpacity?.addEventListener('input', () => {
     if (badgeWindowOpacity) badgeWindowOpacity.textContent = `${rngWindowOpacity.value}%`;
     saveSetting('window_opacity', parseInt(rngWindowOpacity.value, 10));
+  });
+
+  // Canvas & Window Chrome
+  selGridOverlay?.addEventListener('change', () => {
+    saveSetting('grid_overlay', selGridOverlay.value);
+    saveSetting('gridOverlayMode', selGridOverlay.value);
+  });
+  chkSolidBars?.addEventListener('change', () => {
+    saveSetting('solid_bars', chkSolidBars.checked);
+    saveSetting('solidBarsInTransparencyMode', chkSolidBars.checked);
+    saveSetting('_solidBarsInTransparencyMode', chkSolidBars.checked);
+  });
+
+  // Global Hotkey
+  const applyGlobalHotkey = async () => {
+    if (!inputGlobalHotkey) return;
+    const hotkey = inputGlobalHotkey.value.trim() || 'Ctrl+Space';
+    try {
+      await invoke('register_global_hotkey', { hotkey });
+      saveSetting('global_hotkey', hotkey);
+      saveSetting('globalHotkey', hotkey);
+    } catch (err) {
+      console.error('Failed to register global hotkey:', err);
+      alert(`Could not set global hotkey '${hotkey}': ${err}`);
+    }
+  };
+
+  btnSaveHotkey?.addEventListener('click', applyGlobalHotkey);
+  inputGlobalHotkey?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      applyGlobalHotkey();
+    }
   });
 
   // Editor
@@ -864,6 +998,106 @@ function wireExtensionEvents(): void {
       key: 'systemPrompt',
       value: txtExtPrefOpenaiSystemPrompt.value,
     });
+  });
+
+  // Export Preferences
+  chkExportFirstLineTitle?.addEventListener('change', () =>
+    saveSetting('exportGeneralUseFirstLineAsTitle', chkExportFirstLineTitle.checked)
+  );
+  chkExportOmitKeywords?.addEventListener('change', () =>
+    saveSetting('exportGeneralOmitKeyword', chkExportOmitKeywords.checked)
+  );
+  chkExportPlainTextEnabled?.addEventListener('change', () =>
+    saveSetting('exportPlainTextEnabled', chkExportPlainTextEnabled.checked)
+  );
+  chkExportMarkdownEnabled?.addEventListener('change', () =>
+    saveSetting('exportMarkdownEnabled', chkExportMarkdownEnabled.checked)
+  );
+  chkExportObsidianEnabled?.addEventListener('change', () =>
+    saveSetting('exportObsidianEnabled', chkExportObsidianEnabled.checked)
+  );
+  txtExportObsidianVault?.addEventListener('change', () =>
+    saveSetting('exportObsidianVault', txtExportObsidianVault.value)
+  );
+  chkExportObsidianConvertMarkdown?.addEventListener('change', () =>
+    saveSetting('exportObsidianConvertToMarkdown', chkExportObsidianConvertMarkdown.checked)
+  );
+  chkExportBearEnabled?.addEventListener('change', () =>
+    saveSetting('exportBearEnabled', chkExportBearEnabled.checked)
+  );
+  chkExportBearConvertMarkdown?.addEventListener('change', () =>
+    saveSetting('exportBearConvertToMarkdown', chkExportBearConvertMarkdown.checked)
+  );
+  chkExportAppleNotesEnabled?.addEventListener('change', () =>
+    saveSetting('exportAppleNotesEnabled', chkExportAppleNotesEnabled.checked)
+  );
+  chkExportAppleNotesRichText?.addEventListener('change', () =>
+    saveSetting('exportAppleNotesConvertToRichText', chkExportAppleNotesRichText.checked)
+  );
+  chkExportNotionEnabled?.addEventListener('change', () =>
+    saveSetting('exportNotionEnabled', chkExportNotionEnabled.checked)
+  );
+  chkExportNotionSaveDatabase?.addEventListener('change', () =>
+    saveSetting('exportNotionSaveInDatabase', chkExportNotionSaveDatabase.checked)
+  );
+  txtExportNotionDatabaseName?.addEventListener('change', () =>
+    saveSetting('exportNotionDatabaseName', txtExportNotionDatabaseName.value)
+  );
+  chkExportCustomEnabled?.addEventListener('change', () =>
+    saveSetting('exportCustomEnabled', chkExportCustomEnabled.checked)
+  );
+  txtExportCustomName?.addEventListener('change', () =>
+    saveSetting('exportCustomName', txtExportCustomName.value)
+  );
+  txtExportCustomURLTemplate?.addEventListener('change', () =>
+    saveSetting('exportCustomURLTemplate', txtExportCustomURLTemplate.value)
+  );
+
+  // Bulk ZIP Download
+  btnSettingsExportZip?.addEventListener('click', async () => {
+    if (!btnSettingsExportZip) return;
+    const origText = btnSettingsExportZip.textContent || 'Download All Notes as ZIP';
+    btnSettingsExportZip.disabled = true;
+    btnSettingsExportZip.textContent = 'Generating ZIP archive...';
+
+    try {
+      const bytes = await invoke<number[]>('export_all_notes_zip', {
+        options: {
+          use_first_line_as_title: chkExportFirstLineTitle?.checked ?? true,
+          omit_keywords: chkExportOmitKeywords?.checked ?? false,
+          convert_to_markdown: chkExportMarkdownEnabled?.checked ?? true,
+          convert_to_rich_text: false,
+        },
+      });
+
+      if (bytes && bytes.length > 0) {
+        const uint8 = new Uint8Array(bytes);
+        const blob = new Blob([uint8], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        a.download = `plainpad-notes-export-${dateStr}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        btnSettingsExportZip.textContent = 'ZIP Exported Successfully!';
+      } else {
+        btnSettingsExportZip.textContent = 'No Notes to Export';
+      }
+    } catch (err) {
+      console.error('Failed to export all notes as ZIP:', err);
+      btnSettingsExportZip.textContent = 'Export Failed';
+    }
+
+    setTimeout(() => {
+      if (btnSettingsExportZip) {
+        btnSettingsExportZip.textContent = origText;
+        btnSettingsExportZip.disabled = false;
+      }
+    }, 2500);
   });
 }
 

@@ -99,6 +99,15 @@
         </svg>
         <span>Extensions</span>
       </button>
+
+      <button class="tab-btn" data-tab="export" role="tab" aria-selected="false" title="Export">
+        <svg class="tab-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+          <polyline points="16 6 12 2 8 6"/>
+          <line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+        <span>Export</span>
+      </button>
     </nav>
   </header>
 
@@ -297,6 +306,33 @@
             <input type="range" id="setting-window-opacity" min="70" max="100" step="5" value="95" />
             <span id="window-opacity-val" class="slider-badge">95%</span>
           </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="section-title">Canvas & Window Chrome</h3>
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Grid Overlay Mode</span>
+            <span class="setting-desc">Background canvas grid texture behind note editor</span>
+          </div>
+          <select id="setting-grid-overlay" class="select-control">
+            <option value="none">None</option>
+            <option value="dots">Dots</option>
+            <option value="smallGrid">Small Grid</option>
+            <option value="bigGrid">Big Grid</option>
+          </select>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-meta">
+            <span class="setting-label">Solid Chrome Bars</span>
+            <span class="setting-desc">Keep top and bottom chrome bars solid when window is translucent</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-solid-bars" />
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
     </section>
@@ -641,9 +677,12 @@
         <div class="setting-row">
           <div class="setting-meta">
             <span class="setting-label">Summon Plainpad</span>
-            <span class="setting-desc">Summon or hide Plainpad instantly from any application</span>
+            <span class="setting-desc">Summon or hide Plainpad instantly from any application (default Ctrl+Space)</span>
           </div>
-          <div class="hotkey-badge">Alt + A</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="setting-global-hotkey" class="text-input" style="width: 140px; text-align: center; font-family: var(--font-mono); font-size: 13px; padding: 4px 8px;" value="Ctrl+Space" placeholder="e.g. Ctrl+Space" />
+            <button id="btn-save-hotkey" class="button-glass" style="padding: 4px 12px; font-size: 12px; cursor: pointer;">Set</button>
+          </div>
         </div>
       </div>
 
@@ -1010,6 +1049,201 @@
          </div>
        </div>
      </section>
+
+      <!-- TAB 10: EXPORT -->
+      <section id="panel-export" class="tab-panel" role="tabpanel">
+        <!-- General Export Options -->
+        <div class="settings-section">
+          <h3 class="section-title">General Export Options</h3>
+          
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Use first line as document title</span>
+              <span class="setting-desc">Extracts first non-empty line as note title, omitting it from document body (exportGeneralUseFirstLineAsTitle)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-first-line-title" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Omit trigger keywords from export</span>
+              <span class="setting-desc">Strips math, sum, avg, count, and ::command triggers from output text (exportGeneralOmitKeyword)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-omit-keywords" />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Format Handlers & Destinations -->
+        <div class="settings-section">
+          <h3 class="section-title">Format Handlers & External Destinations</h3>
+
+          <!-- Plain Text -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Plain Text (.txt)</span>
+              <span class="setting-desc">Enable standard raw text file export (exportPlainTextEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-plain-text-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Markdown -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Markdown (.md)</span>
+              <span class="setting-desc">Enable standard Markdown document export (exportMarkdownEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-markdown-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Obsidian -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Obsidian URI Integration</span>
+              <span class="setting-desc">Enable obsidian:// URI scheme routing (exportObsidianEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-obsidian-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-col sub-row">
+            <div class="setting-row inline-input-row">
+              <span class="setting-label">Vault Name</span>
+              <input type="text" id="setting-export-obsidian-vault" class="text-input" placeholder="Notes" value="Notes" style="width: 220px;" />
+            </div>
+            <div class="setting-row inline-input-row" style="margin-top: 6px;">
+              <span class="setting-label">Convert note content to Markdown</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-export-obsidian-convert-markdown" checked />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Bear -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Bear App Integration</span>
+              <span class="setting-desc">Enable bear://x-callback-url note creation (exportBearEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-bear-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-col sub-row">
+            <div class="setting-row inline-input-row">
+              <span class="setting-label">Convert note content to Markdown</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-export-bear-convert-markdown" checked />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Apple Notes -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Apple Notes Integration</span>
+              <span class="setting-desc">Enable Apple Notes transfer (exportAppleNotesEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-apple-notes-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-col sub-row">
+            <div class="setting-row inline-input-row">
+              <span class="setting-label">Convert to Rich Text (HTML)</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-export-apple-notes-rich-text" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Notion -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Notion Integration</span>
+              <span class="setting-desc">Enable Notion database page transfer (exportNotionEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-notion-enabled" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-col sub-row">
+            <div class="setting-row inline-input-row">
+              <span class="setting-label">Save in Database</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-export-notion-save-database" />
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-row inline-input-row" style="margin-top: 6px;">
+              <span class="setting-label">Database Name</span>
+              <input type="text" id="setting-export-notion-database-name" class="text-input" placeholder="Notes Database" style="width: 220px;" />
+            </div>
+          </div>
+
+          <!-- Custom URL Scheme -->
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Custom URL Scheme Template</span>
+              <span class="setting-desc">Dispatch to any desktop or mobile app via custom URI (exportCustomEnabled)</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="setting-export-custom-enabled" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting-col sub-row">
+            <div class="setting-row inline-input-row">
+              <span class="setting-label">App Name</span>
+              <input type="text" id="setting-export-custom-name" class="text-input" placeholder="My App" value="Custom App" style="width: 220px;" />
+            </div>
+            <div class="setting-col" style="margin-top: 6px;">
+              <div class="setting-meta" style="margin-bottom: 4px;">
+                <span class="setting-label">URL Template</span>
+                <span class="setting-desc">Available tokens: {TITLE}, {CONTENT}, {DATE}, {DATE_TIME}</span>
+              </div>
+              <input type="text" id="setting-export-custom-url-template" class="text-input" placeholder="myapp://create?title={TITLE}&text={CONTENT}&date={DATE}" style="width: 100%; font-family: var(--font-mono, monospace); font-size: 11px;" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Bulk Backup Archive -->
+        <div class="settings-section">
+          <h3 class="section-title">Bulk Backup Archive</h3>
+          <div class="setting-row">
+            <div class="setting-meta">
+              <span class="setting-label">Download All Notes as ZIP</span>
+              <span class="setting-desc">Export all active and slotted notes into an uncompressed .zip archive of text files</span>
+            </div>
+            <button id="btn-settings-export-zip" class="action-btn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download ZIP
+            </button>
+          </div>
+        </div>
+      </section>
    </main>
 
   <script type="module" src="settings.js"></script>

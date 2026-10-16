@@ -40,11 +40,11 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-23** | **JavaScript Extension Runtime**: Sandboxed JS engine executing `antinote-extensions-base-v0.0.1.js` classes (`Extension`, `Command`, `Preference`, `ReturnObject`). | SPEC §8.1 | 7 | Complete |
 | **REQ-24** | **Secure Native API Bridge**: `callAPI` function injecting credentials from secure storage and scoping text access (`none`, `line`, `full`). | SPEC §8.1 | 7 | Complete |
 | **REQ-25** | **AI Model Catalog & Command Syntax**: Invocation syntax `::commandName(...)` and catalog support for OpenAI, Anthropic, and local Ollama (`localhost:11434`). | SPEC §8.2 | 7 | Complete |
-| **REQ-26** | **Floating Glass Window & Hotkey**: Translucent backdrop blur, global summon shortcut (`Ctrl+Space`), system tray icon/menu, and always-on-top pin persistence. | SPEC §9, §11 | 8 | Pending |
-| **REQ-27** | **The Void Shaders**: WebGL/Canvas fragment shaders replicating `voidRipple`, `voidDistortionSlow`, and `voidDistortionBurst` with permanent purge confirmation. | SPEC §9 | 8 | Pending |
-| **REQ-28** | **Canvas Textures & Typography**: Background overlays (`dots`, `smallGrid`, `bigGrid`), sub-pixel vertical caret nudging, and RTL text layout. | SPEC §7, §9, §11 | 8 | Pending |
-| **REQ-29** | **Find & Replace Engine**: Search modal supporting `Contains`, `Starts With`, `Ends With`, `Exact Match`, case sensitivity, and highlighted match counts. | SPEC §9 | 8 | Pending |
-| **REQ-30** | **Third-Party Export Suite**: Direct export to Markdown, Plaintext, Obsidian (vault paths), Bear, Apple Notes, Notion, Custom URL templates, and bulk ZIP. | SPEC §10 | 8 | Pending |
+| **REQ-26** | **Floating Glass Window & Hotkey**: Translucent backdrop blur, global summon shortcut (`Ctrl+Space`), system tray icon/menu, and always-on-top pin persistence. | SPEC §9, §11 | 8 | Complete |
+| **REQ-27** | **The Void Shaders**: WebGL/Canvas fragment shaders replicating `voidRipple`, `voidDistortionSlow`, and `voidDistortionBurst` with permanent purge confirmation. | SPEC §9 | 8 | Complete |
+| **REQ-28** | **Canvas Textures & Typography**: Background overlays (`dots`, `smallGrid`, `bigGrid`), sub-pixel vertical caret nudging, and RTL text layout. | SPEC §7, §9, §11 | 8 | Complete |
+| **REQ-29** | **Find & Replace Engine**: Search modal supporting `Contains`, `Starts With`, `Ends With`, `Exact Match`, case sensitivity, and highlighted match counts. | SPEC §9 | 8 | Complete |
+| **REQ-30** | **Third-Party Export Suite**: Direct export to Markdown, Plaintext, Obsidian (vault paths), Bear, Apple Notes, Notion, Custom URL templates, and bulk ZIP. | SPEC §10 | 8 | Complete |
 
 ---
 
@@ -70,4 +70,4 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | REQ-15 .. REQ-17 | Phase 5 | `crates/plainpad-core/src/timers.rs`, `ui/src/timer.ts` | Complete |
 | REQ-18 .. REQ-22 | Phase 6 | `ui/src/editor.ts`, `ui/src/vim.ts` | Complete |
 | REQ-23 .. REQ-25 | Phase 7 | `crates/plainpad-core/src/extensions.rs`, `ui/src/extensions.ts` | Complete |
-| REQ-26 .. REQ-30 | Phase 8 | `ui/src/shaders.ts`, `export.rs`, `src-tauri/src/main.rs` | Planned |
+| REQ-26 .. REQ-30 | Phase 8 | `ui/src/shaders.ts`, `export.rs`, `src-tauri/src/main.rs` | Complete |

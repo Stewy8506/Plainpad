@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-15T15:35:00+05:30
+updated: 2026-10-16T11:45:00+05:30
 ---
 
 # Project State
@@ -7,32 +7,26 @@ updated: 2026-10-15T15:35:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 7 - JavaScript Extension Runtime & AI Model Catalog  
+**Phase:** 8 - Window Chrome, Void Shaders, Grid Overlays & Export Suite  
 **Status:** complete & verified  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-7 complete: 18/18 plans; Phase 8 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-25 Complete: 25/30)  
-**Phase 7 Verification:** `.gsd/phases/7/VERIFICATION.md` (Status: PASS, 11/11 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-8 complete: 22/22 plans; 100% Milestone completion)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-30 Complete: 30/30)  
+**Phase 8 Verification:** `.gsd/phases/8/VERIFICATION.md` (Status: PASS, 23/23 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and independent verification of **Phase 7: JavaScript Extension Runtime & AI Model Catalog**:
-  - `01-PLAN.md`: SQLite credential store in `app_state` (`apikey_openai`, `apikey_anthropic`), origin whitelisting (`https://` enforcement, localhost allowed), in-flight `{{API_KEY}}` secret substitution, data privacy scoping (`none`, `line`, `full`), native `call_api` bridge IPC, and TypeScript runtime compatibility layer running `antinote-extensions-base-v0.0.1.js` (`Extension`, `Command`, `Preference`, `Parameter`, `TutorialCommand`, `ReturnObject`, `MathEvaluator`).
-  - `02-PLAN.md`: Multi-provider AI Model Catalog (`fetch_ai_models` for OpenAI, Anthropic, Ollama), double-colon `::commandName(...)` and alias `command(...)` editor syntax parsing, non-blocking execution with visual status indicator (`#extension-status-indicator`), return type routing (`insert`, `replaceLine`, `replaceAll`, `openURL`), sample OpenAI extension registration (`sample-openai-extension.js`), and dedicated "Extensions & AI Providers" settings panel.
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 11 empirical checks across 146 unit & integration tests, TypeScript typechecking, UI bundling, and standalone Node.js runtime validation.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-23 through REQ-25 Complete.
+- Completed full execution and independent verification of **Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite**:
+  - `01-PLAN.md`: Desktop window management, dynamic global summon hotkey (`Ctrl+Space`), pin persistence on launch (`restorePinOnOpen`, `_lastPinState`), full system tray menu with slotted notes quick jump, canvas grid textures (`none`, `dots`, `smallGrid`, `bigGrid`), solid chrome bars toggle (`solidBarsInTransparencyMode`), and RTL text orientation (`forceRTL`).
+  - `02-PLAN.md`: WebGL fragment shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`) on `#void-canvas` with procedural 2D Canvas fallback, The Void modal view with relative timestamps, note restoration (`restore_note`), per-note purge (`permanently_delete_note`), and permanent purge confirmation dialog with the canonical quote: *"This will permanently delete %lld notes. There are no turtles beyond The Void."*.
+  - `03-PLAN.md`: Multi-criteria Find & Replace search engine (`FindAndReplaceManager` for `Contains`, `Starts With`, `Ends With`, `Exact Match`, case sensitivity, regex safety, in-editor backdrop highlight pills, live counters, next/prev navigation, single/bulk replace, and all-notes multi-note excerpt search) + Core Rust export engine (`crates/plainpad-core/src/export.rs` for Markdown, Obsidian, Bear, Apple Notes, Notion, Custom URL templates, first-line title, keyword omission, and pure Rust zero-dependency bulk ZIP archive generator) + UI export modal (`#export-modal`) and Settings export panel.
+  - `04-PLAN.md` (Gap Closure): Fixed unclosed `<div>` in `ui/index.html` after `#void-confirm-dialog`, unnesting `#export-modal` so it renders cleanly and independently on screen.
+  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 23 empirical checks across 153 unit & integration tests, TypeScript typechecking, UI bundling, AST ancestor analysis, and DOM tag balance.
+- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-26 through REQ-30 Complete.
 
 ## Next Steps
 
-1. Batch commit Phase 7 to git: `feat(phase-7): implement javascript extension runtime and ai model catalog`.
-2. Plan Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite (`/plan 8`).
-   - Translucent glass floating window, global summon hotkey (`Ctrl+Space`), system tray
-   - WebGL Void distortion shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`)
-   - Canvas grid background overlays (`dots`, `smallGrid`, `bigGrid`)
-   - Find & Replace search engine (`FindAndReplaceManager`)
-   - Third-party export suite (Markdown, Plaintext, Obsidian, Bear, Apple Notes, Notion, Custom URL, ZIP)
-3. Execute Phase 8 plans.
-4. Verify Phase 8 deliverables (REQ-26 through REQ-30).
-5. Complete Milestone audit.
+1. Batch commit Phase 8 to git: `feat(phase-8): implement window chrome, void shaders, grid overlays, and export suite`.
+2. Final milestone review and verification.
 
 ## Active Decisions
 
@@ -44,6 +38,8 @@ updated: 2026-10-15T15:35:00+05:30
 | Math & Conversion Engine | Fend + custom preprocessor & affine 5-domain unit system | 2026-10-13 | Phase 3, Phase 4 |
 | Timer & Pomodoro Engine | Delta-based background tick, JSON persistence, circular SVG pill UI | 2026-10-15 | Phase 5, UI, Shell |
 | JS Extensions Architecture | Sandboxed TS runtime + native Rust callAPI bridge with SQLite credential store | 2026-10-15 | Phase 7 |
+| Void Shader Architecture | WebGL full-screen fragment shaders + procedural 2D Canvas fallback | 2026-10-16 | Phase 8 |
+| Bulk ZIP Archive Generator | Zero-dependency pure Rust IEEE 802.3 CRC32 uncompressed ZIP format | 2026-10-16 | Phase 8 |
 | Commit cadence | Commit once per completed phase (per user rule) | 2026-10-13 | Execution workflow |
 | Planning methodology | GSD (SPEC → PLAN → EXECUTE → VERIFY → COMMIT) | 2026-10-13 | Entire project lifecycle |
 
@@ -53,4 +49,4 @@ None.
 
 ## Concerns
 
-None. Phase 7 is fully verified and stable.
+None. All 8 phases are complete, 30/30 requirements implemented and verified.

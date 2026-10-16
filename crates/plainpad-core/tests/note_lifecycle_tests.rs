@@ -211,3 +211,27 @@ fn test_purge_expired_void() {
     assert_eq!(purged, 1);
     assert!(store.list_void().expect("void is empty").is_empty());
 }
+
+#[test]
+fn test_permanently_delete_single_note() {
+    let store = SqliteStore::open_in_memory().expect("open store");
+    let note1 = store.create_note("Void Note 1").expect("create note 1");
+    let note2 = store.create_note("Active Note 2").expect("create note 2");
+
+    // Attempting to permanently delete note not in void must fail
+    let err = store.permanently_delete_note(&note2.id).unwrap_err();
+    assert!(matches!(err, StoreError::InvalidOperation(_)));
+
+    // Soft delete note 1 into The Void
+    store.soft_delete_note(&note1.id).expect("soft delete note 1");
+    assert_eq!(store.list_void().expect("list void").len(), 1);
+
+    // Permanently delete note 1
+    store.permanently_delete_note(&note1.id).expect("permanent delete note 1");
+    assert_eq!(store.list_void().expect("list void").len(), 0);
+    assert!(store.load_note(&note1.id).expect("load note 1").is_none());
+
+    // Second call should return NotFound
+    let err2 = store.permanently_delete_note(&note1.id).unwrap_err();
+    assert!(matches!(err2, StoreError::NotFound(_)));
+}

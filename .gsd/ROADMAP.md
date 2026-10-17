@@ -105,14 +105,25 @@ updated: 2026-10-13T20:14:00+05:30
 ---
 
 ### Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite
-**Status:** ⬜ Not Started  
+**Status:** ✅ Complete  
 **Objective:** Translucent glass floating window, global hotkey (`Ctrl+Space`), system tray, WebGL Void shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`), canvas grid textures, search modal, and third-party export suite (Markdown, Obsidian, Bear, Notion, Apple Notes, Custom URL, ZIP).  
 **Depends on:** Phase 1, Phase 2, Phase 6  
 **Requirements:** REQ-26, REQ-27, REQ-28, REQ-29, REQ-30  
 **Plans:**
-- [ ] Plan 8.1: Window translucency, global summon hotkey, system tray icon, and background canvas grid textures
-- [ ] Plan 8.2: The Void WebGL distortion shaders and empty confirmation dialog
-- [ ] Plan 8.3: Search engine (`FindAndReplaceManager`) and third-party export suite (Obsidian, Bear, Notion, Apple Notes, URL template, ZIP)
+- [x] Plan 8.1: Window translucency, global summon hotkey, system tray icon, and background canvas grid textures
+- [x] Plan 8.2: The Void WebGL distortion shaders and empty confirmation dialog
+- [x] Plan 8.3: Search engine (`FindAndReplaceManager`) and third-party export suite (Obsidian, Bear, Notion, Apple Notes, URL template, ZIP)
+- [x] Plan 8.4: Gap Closure: Balanced HTML tags and export modal styling
+
+---
+
+### Phase 9: Editor Calculation UX Polish
+**Status:** ✅ Complete  
+**Objective:** Suppress trivial identity number calculations (`20` -> no `= 20`), eliminate duplicate equals signs on manual typing (` =` stepping), and enable visual selection synchronization and rich clipboard copy for calculation answers.  
+**Depends on:** Phase 3, Phase 6  
+**Requirements:** UX-01, UX-02, UX-03  
+**Plans:**
+- [x] Plan 9.1: Trivial identity suppression, ghost equals absorption, and rich clipboard copy interceptor
 
 ---
 
@@ -127,7 +138,8 @@ updated: 2026-10-13T20:14:00+05:30
 | **Phase 5** | Timer, Stopwatch & Pomodoro | ✅ Complete | 3/3 | 100% |
 | **Phase 6** | Rich Editor & Modal Vim Mode | ✅ Complete | 3/3 | 100% |
 | **Phase 7** | JS Extension Runtime & AI Catalog | ✅ Complete | 2/2 | 100% |
-| **Phase 8** | Window Chrome, Shaders & Export Suite | ⬜ Not Started | 0/3 | 0% |
+| **Phase 8** | Window Chrome, Shaders & Export Suite | ✅ Complete | 4/4 | 100% |
+| **Phase 9** | Editor Calculation UX Polish | ✅ Complete | 1/1 | 100% |
 
 ---
 
@@ -142,4 +154,5 @@ updated: 2026-10-13T20:14:00+05:30
 | Phase 5 | 2026-10-15 | 2026-10-15 | ~45m |
 | Phase 6 | 2026-10-15 | 2026-10-15 | ~50m |
 | Phase 7 | 2026-10-15 | 2026-10-15 | ~40m |
-| Phase 8 | — | — | — |
+| Phase 8 | 2026-10-16 | 2026-10-16 | ~1h |
+| Phase 9 | 2026-10-17 | — | — |

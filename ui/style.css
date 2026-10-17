@@ -656,6 +656,14 @@ button.button-glass:active {
   display: inline-block;
 }
 
+/* Active drag/text selection highlight synchronization */
+.anno.is-selected {
+  background: rgba(194, 132, 122, 0.35) !important;
+  color: var(--fg, #eceff4) !important;
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px rgba(194, 132, 122, 0.35);
+}
+
 /* ========================================================================
    Apple Marketing Style Kinetic Blur-Fade Reveal Animation
    ======================================================================== */

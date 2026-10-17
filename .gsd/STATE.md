@@ -7,32 +7,24 @@ updated: 2026-10-15T15:35:00+05:30
 ## Current Position
 
 **Milestone:** Antinote 1:1 Parity Reconstruction  
-**Phase:** 7 - JavaScript Extension Runtime & AI Model Catalog  
+**Phase:** 9 - Editor Calculation UX Polish  
 **Status:** complete & verified  
-**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-7 complete: 18/18 plans; Phase 8 next)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-25 Complete: 25/30)  
-**Phase 7 Verification:** `.gsd/phases/7/VERIFICATION.md` (Status: PASS, 11/11 must-haves verified)  
+**Roadmap:** `.gsd/ROADMAP.md` (Phases 1-9 complete: 23/23 plans; 100%)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-30 Complete; UX-01 through UX-03 Verified)  
+**Phase 9 Verification:** `.gsd/phases/9/VERIFICATION.md` (Status: PASS, 5/5 must-haves verified)  
 
 ## Last Action
 
-- Completed full execution and independent verification of **Phase 7: JavaScript Extension Runtime & AI Model Catalog**:
-  - `01-PLAN.md`: SQLite credential store in `app_state` (`apikey_openai`, `apikey_anthropic`), origin whitelisting (`https://` enforcement, localhost allowed), in-flight `{{API_KEY}}` secret substitution, data privacy scoping (`none`, `line`, `full`), native `call_api` bridge IPC, and TypeScript runtime compatibility layer running `antinote-extensions-base-v0.0.1.js` (`Extension`, `Command`, `Preference`, `Parameter`, `TutorialCommand`, `ReturnObject`, `MathEvaluator`).
-  - `02-PLAN.md`: Multi-provider AI Model Catalog (`fetch_ai_models` for OpenAI, Anthropic, Ollama), double-colon `::commandName(...)` and alias `command(...)` editor syntax parsing, non-blocking execution with visual status indicator (`#extension-status-indicator`), return type routing (`insert`, `replaceLine`, `replaceAll`, `openURL`), sample OpenAI extension registration (`sample-openai-extension.js`), and dedicated "Extensions & AI Providers" settings panel.
-  - `VERIFICATION.md`: Independent audit by `gsd-verifier` passed all 11 empirical checks across 146 unit & integration tests, TypeScript typechecking, UI bundling, and standalone Node.js runtime validation.
-- Updated `.gsd/ROADMAP.md` and `.gsd/REQUIREMENTS.md` marking REQ-23 through REQ-25 Complete.
+- Completed full execution and independent verification of **Phase 9: Editor Calculation UX Polish**:
+  - `crates/plainpad-core/src/intent.rs`: Suppressed trivial identity number evaluations (`20`, `1234.5`, `-5`, `20 =`, `$50`) via `is_trivial_bare_number()` and input/output identity matching, while preserving genuine math and currency expressions (`20 + 5`, `20 inr to usd`).
+  - `ui/src/main.ts`: Fixed ghost equals cache key by incorporating `hasTrailingEquals` into `annoKey`, eliminating the duplicate equals bug (`= = $0.21`). Added `Tab` key calculation absorption and clickable answer copy.
+  - `ui/src/main.ts` & `ui/styles.css` / `ui/style.css`: Implemented `syncOverlaySelection()` for real-time `.anno.is-selected` styling during drag-selection and a rich `copy` event interceptor that captures `expression = answer` into the system clipboard.
+  - Independent audit by `gsd-verifier` passed all 5 must-haves across 154 unit & integration tests, TypeScript typechecking, UI bundling, and Tauri check.
 
 ## Next Steps
 
-1. Batch commit Phase 7 to git: `feat(phase-7): implement javascript extension runtime and ai model catalog`.
-2. Plan Phase 8: Window Chrome, Void Shaders, Grid Overlays & Export Suite (`/plan 8`).
-   - Translucent glass floating window, global summon hotkey (`Ctrl+Space`), system tray
-   - WebGL Void distortion shaders (`voidRipple`, `voidDistortionSlow`, `voidDistortionBurst`)
-   - Canvas grid background overlays (`dots`, `smallGrid`, `bigGrid`)
-   - Find & Replace search engine (`FindAndReplaceManager`)
-   - Third-party export suite (Markdown, Plaintext, Obsidian, Bear, Apple Notes, Notion, Custom URL, ZIP)
-3. Execute Phase 8 plans.
-4. Verify Phase 8 deliverables (REQ-26 through REQ-30).
-5. Complete Milestone audit.
+1. Batch commit Phase 9 changes: `feat(phase-9): suppress trivial numbers, fix ghost equals stepping, and add rich clipboard copy`.
+2. Await user feedback or proceed to settings panel redesign when ready.
 
 ## Active Decisions
 

@@ -804,6 +804,9 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
 
     // Expressions, functions, variables, labelled sums.
     if has_math_op || has_func || mentions_var || forced_math {
+        if is_trivial_bare_number(t) {
+            return None;
+        }
         // `x` used as multiplication (Antinote-style `trees x o2 per tree`)
         let normalized = if t.contains(" x ") || t.ends_with(" x") || t.contains(" X ") {
             t.replace(" x ", " * ").replace(" X ", " * ")
@@ -813,6 +816,11 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
         if let Some(out) = mathwrap::eval_line(&normalized, vars) {
             let numeric = out.result.chars().next().is_some_and(|c| c.is_ascii_digit() || c == '-' || c == '+');
             if numeric {
+                // Identity check: if output matches input without operations, suppress
+                let trimmed_norm = normalized.trim().trim_end_matches(['=', '?']).trim();
+                if out.result.trim() == trimmed_norm {
+                    return None;
+                }
                 let conf = if forced_math { 0.9 } else { 0.88 };
                 let why: &str = if mentions_var {
                     "uses your named values on earlier lines"
@@ -826,6 +834,29 @@ fn classify_math(t: &str, vars: &Vars, forced_math: bool) -> Option<(&'static st
         }
     }
     None
+}
+
+fn is_trivial_bare_number(s: &str) -> bool {
+    let trimmed = s.trim().trim_end_matches(['=', '?']).trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let stripped = trimmed
+        .strip_prefix('+')
+        .or_else(|| trimmed.strip_prefix('-'))
+        .unwrap_or(trimmed);
+    let stripped = stripped
+        .strip_prefix('$')
+        .or_else(|| stripped.strip_prefix('€'))
+        .or_else(|| stripped.strip_prefix('£'))
+        .or_else(|| stripped.strip_prefix('₹'))
+        .or_else(|| stripped.strip_prefix('¥'))
+        .unwrap_or(stripped)
+        .trim();
+    if stripped.is_empty() {
+        return false;
+    }
+    stripped.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',')
 }
 
 fn contains_word(hay: &str, word: &str) -> bool {

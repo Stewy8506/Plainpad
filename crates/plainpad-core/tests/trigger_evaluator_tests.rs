@@ -194,3 +194,42 @@ fn test_all_nine_trigger_categories_recognized() {
     assert_eq!(anno_timer.kind, "timer");
     assert_eq!(anno_timer.value, "5 min");
 }
+
+#[test]
+fn test_suppress_trivial_bare_numbers() {
+    let config = TriggerConfig::default();
+
+    // 1. Bare numbers without mode declaration
+    let a1 = analyze_with_config("20", false, &config);
+    assert!(a1.annotations.iter().all(|a| a.kind != "math" && a.kind != "conversion"));
+
+    let a2 = analyze_with_config("1234.50", false, &config);
+    assert!(a2.annotations.iter().all(|a| a.kind != "math" && a.kind != "conversion"));
+
+    let a3 = analyze_with_config("-5", false, &config);
+    assert!(a3.annotations.iter().all(|a| a.kind != "math" && a.kind != "conversion"));
+
+    let a4 = analyze_with_config("20 =", false, &config);
+    assert!(a4.annotations.iter().all(|a| a.kind != "math" && a.kind != "conversion"));
+
+    let a5 = analyze_with_config("$50", false, &config);
+    assert!(a5.annotations.iter().all(|a| a.kind != "math" && a.kind != "conversion"));
+
+    // 2. Bare numbers inside forced math mode note
+    let text_forced = "math\n20\n100\n-42\n30 =";
+    let a_forced = analyze_with_config(text_forced, false, &config);
+    let math_annos: Vec<_> = a_forced.annotations.iter().filter(|a| a.kind == "math" || a.kind == "conversion").collect();
+    assert!(math_annos.is_empty(), "Bare numbers inside math mode note should not produce math annotations: {:?}", math_annos);
+
+    // 3. Genuine calculations inside forced math mode note still evaluate
+    let text_calc = "math\n20 + 5\n10 * 3\n5 km in miles";
+    let a_calc = analyze_with_config(text_calc, false, &config);
+    let anno_add = a_calc.annotations.iter().find(|a| a.line == 1).expect("20 + 5 math annotation");
+    assert_eq!(anno_add.value, "25");
+
+    let anno_mul = a_calc.annotations.iter().find(|a| a.line == 2).expect("10 * 3 math annotation");
+    assert_eq!(anno_mul.value, "30");
+
+    let anno_unit = a_calc.annotations.iter().find(|a| a.line == 3).expect("5 km in miles annotation");
+    assert_eq!(anno_unit.kind, "conversion");
+}

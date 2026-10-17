@@ -1405,7 +1405,20 @@ function renderOverlay(analysis: Analysis, text: string): void {
       }
     };
 
-    const annoKey = `${anno.line}:${anno.kind}`;
+    const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
+    const annoKey = (anno.kind === 'math' || anno.kind === 'conversion')
+      ? `${anno.line}:${anno.kind}:${hasTrailingEquals ? 'eq' : 'noeq'}`
+      : `${anno.line}:${anno.kind}`;
+    const altKey = (anno.kind === 'math' || anno.kind === 'conversion')
+      ? `${anno.line}:${anno.kind}:${hasTrailingEquals ? 'noeq' : 'eq'}`
+      : null;
+    if (altKey) {
+      const altEl = existingEls.get(altKey);
+      if (altEl) {
+        altEl.remove();
+        existingEls.delete(altKey);
+      }
+    }
     const annoValue = String(anno.value || anno.chip || '');
     const isNew = !skipKineticAnimation && (activeAnnoCache.get(annoKey) !== annoValue);
     nextAnnoCache.set(annoKey, annoValue);
@@ -1453,24 +1466,31 @@ function renderOverlay(analysis: Analysis, text: string): void {
 
     if (anno.kind === 'math' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-math${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
       const prefix = hasTrailingEquals ? '' : '= ';
       const formatted = formatNumber(anno.value);
       renderKineticContent(el, prefix, formatted, isNew);
-      el.title = anno.why;
+      el.title = `${anno.why} (Click to copy answer)`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(formatted).catch(() => {});
+      });
     } else if (anno.kind === 'conversion' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
       el.className = `anno anno-conversion${hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
       const prefix = hasTrailingEquals ? '' : '= ';
       renderKineticContent(el, prefix, anno.value, isNew);
-      el.title = anno.why;
-    } else if (anno.kind === 'timer') {
+      el.title = `${anno.why} (Click to copy answer)`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(anno.value).catch(() => {});
+      });
+    }
+ else if (anno.kind === 'timer') {
       el = document.createElement('div');
       el.className = `anno anno-timer-chip${isNew ? ' kinetic-reveal-chip' : ''}`;
       el.style.top = `${top}px`;
@@ -1673,6 +1693,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
 
   activeAnnoCache = nextAnnoCache;
   skipKineticAnimation = false;
+  syncOverlaySelection();
 }
 
 function formatNumber(value: string): string {
@@ -2018,10 +2039,115 @@ editor.addEventListener('paste', (e: ClipboardEvent) => {
   scheduleAnalyze();
 });
 
+// ---------- Rich Copy and Selection Synchronization ----------
+
+function syncOverlaySelection(): void {
+  const selStart = editor.selectionStart;
+  const selEnd = editor.selectionEnd;
+  const isSelected = selStart !== selEnd;
+
+  for (const el of Array.from(overlay.querySelectorAll('.anno.is-selected'))) {
+    el.classList.remove('is-selected');
+  }
+
+  if (!isSelected || !lastAnalysis?.annotations) {
+    return;
+  }
+
+  const text = editor.value;
+  const lines = text.split('\n');
+  let charCount = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineStart = charCount;
+    const lineLen = lines[i].length;
+    const lineEnd = lineStart + lineLen;
+    charCount = lineEnd + 1; // +1 for newline
+
+    // If selection includes the end of this line's typed content
+    if (selEnd >= lineEnd && selStart <= lineEnd && lineLen > 0) {
+      const anno = lastAnalysis.annotations.find(
+        (a) => a.line === i && (a.kind === 'math' || a.kind === 'conversion') && a.value
+      );
+      if (anno) {
+        const annoEl = overlay.querySelector(`[data-anno-key^="${i}:${anno.kind}"]`) as HTMLElement | null;
+        if (annoEl) {
+          annoEl.classList.add('is-selected');
+        }
+      }
+    }
+  }
+}
+
+editor.addEventListener('copy', (e: ClipboardEvent) => {
+  const selStart = editor.selectionStart;
+  const selEnd = editor.selectionEnd;
+  if (selStart === selEnd || !e.clipboardData) return;
+
+  if (!lastAnalysis?.annotations || lastAnalysis.annotations.length === 0) {
+    return;
+  }
+
+  const text = editor.value;
+  const lines = text.split('\n');
+  let charCount = 0;
+  let hasEnhancedAnyLine = false;
+  const enhancedLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineStart = charCount;
+    const lineLen = lines[i].length;
+    const lineEnd = lineStart + lineLen;
+    charCount = lineEnd + 1; // +1 for newline
+
+    // Skip lines outside selection
+    if (lineEnd < selStart || lineStart > selEnd) {
+      continue;
+    }
+
+    const lineSliceStart = Math.max(0, selStart - lineStart);
+    const lineSliceEnd = Math.min(lineLen, selEnd - lineStart);
+    let lineSlice = lines[i].substring(lineSliceStart, lineSliceEnd);
+
+    // If selection spans to the end of the line's typed content and has an active calculation
+    if (selEnd >= lineEnd && lineLen > 0) {
+      const anno = lastAnalysis.annotations.find(
+        (a) => a.line === i && (a.kind === 'math' || a.kind === 'conversion') && a.value
+      );
+      if (anno) {
+        hasEnhancedAnyLine = true;
+        const trimmedSlice = lineSlice.trimEnd();
+        if (trimmedSlice.endsWith('=') || trimmedSlice.endsWith('?')) {
+          lineSlice = `${trimmedSlice} ${anno.value}`;
+        } else {
+          lineSlice = `${trimmedSlice} = ${anno.value}`;
+        }
+      }
+    }
+    enhancedLines.push(lineSlice);
+  }
+
+  if (hasEnhancedAnyLine) {
+    const enhancedText = enhancedLines.join('\n');
+    e.clipboardData.setData('text/plain', enhancedText);
+    e.preventDefault();
+  }
+});
+
+editor.addEventListener('select', syncOverlaySelection);
+editor.addEventListener('mouseup', syncOverlaySelection);
+editor.addEventListener('keyup', syncOverlaySelection);
+document.addEventListener('selectionchange', () => {
+  if (document.activeElement === editor) {
+    syncOverlaySelection();
+  }
+});
+
 // ---------- Event wiring ----------
 
 editor.addEventListener('input', () => {
   updateBackdrop();
+  syncOverlaySelection();
   scheduleSave();
   scheduleAnalyze();
 });
@@ -2227,6 +2353,29 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
       e.preventDefault();
       const chipLine = parseInt(chipEl.dataset.line || String(cursorLine), 10);
       acceptChip(chipLine, editor.value.split('\n')[chipLine] || '');
+      return;
+    }
+
+    // Calculation answer absorption (Tab steps into equals or commits answer)
+    const activeCalcAnno = lastAnalysis?.annotations?.find(
+      (a) => a.line === cursorLine && (a.kind === 'math' || a.kind === 'conversion') && a.value
+    );
+    if (activeCalcAnno && cursor >= lineStart) {
+      e.preventDefault();
+      const rawCurLine = editor.value.substring(lineStart, lineEnd);
+      if (!rawCurLine.trim().endsWith('=') && !rawCurLine.trim().endsWith('?')) {
+        const separator = rawCurLine.endsWith(' ') ? '= ' : ' = ';
+        editor.value = editor.value.substring(0, lineEnd) + separator + editor.value.substring(lineEnd);
+        editor.selectionStart = editor.selectionEnd = lineEnd + separator.length;
+      } else {
+        const separator = rawCurLine.endsWith(' ') ? '' : ' ';
+        const insertText = separator + activeCalcAnno.value;
+        editor.value = editor.value.substring(0, lineEnd) + insertText + editor.value.substring(lineEnd);
+        editor.selectionStart = editor.selectionEnd = lineEnd + insertText.length;
+      }
+      updateBackdrop();
+      scheduleSave();
+      scheduleAnalyze();
       return;
     }
     e.preventDefault();

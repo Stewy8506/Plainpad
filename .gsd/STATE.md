@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-15T15:35:00+05:30
+updated: 2026-10-17T15:46:00+05:30
 ---
 
 # Project State
@@ -10,21 +10,21 @@ updated: 2026-10-15T15:35:00+05:30
 **Phase:** 9 - Editor Calculation UX Polish  
 **Status:** complete & verified  
 **Roadmap:** `.gsd/ROADMAP.md` (Phases 1-9 complete: 23/23 plans; 100%)  
-**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-30 Complete; UX-01 through UX-03 Verified)  
-**Phase 9 Verification:** `.gsd/phases/9/VERIFICATION.md` (Status: PASS, 5/5 must-haves verified)  
+**Requirements:** `.gsd/REQUIREMENTS.md` (REQ-01 through REQ-30 Complete; UX-01 through UX-04 Verified)  
+**Phase 9 Verification:** `.gsd/phases/9/VERIFICATION.md` (Status: PASS, 6/6 must-haves verified)  
 
 ## Last Action
 
 - Completed full execution and independent verification of **Phase 9: Editor Calculation UX Polish**:
   - `crates/plainpad-core/src/intent.rs`: Suppressed trivial identity number evaluations (`20`, `1234.5`, `-5`, `20 =`, `$50`) via `is_trivial_bare_number()` and input/output identity matching, while preserving genuine math and currency expressions (`20 + 5`, `20 inr to usd`).
-  - `ui/src/main.ts`: Fixed ghost equals cache key by incorporating `hasTrailingEquals` into `annoKey`, eliminating the duplicate equals bug (`= = $0.21`). Added `Tab` key calculation absorption and clickable answer copy.
   - `ui/src/main.ts` & `ui/styles.css` / `ui/style.css`: Implemented `syncOverlaySelection()` for real-time `.anno.is-selected` styling during drag-selection and a rich `copy` event interceptor that captures `expression = answer` into the system clipboard.
-  - Independent audit by `gsd-verifier` passed all 5 must-haves across 154 unit & integration tests, TypeScript typechecking, UI bundling, and Tauri check.
+  - `ui/src/main.ts` & `ui/styles.css`: Solved ghost autocomplete positioning and solidification UX. Replaced hardcoded `+ 10px` gap with stationary zero-gap positioning (`padX + textWidth`), dynamic editor padding measurement (`getEditorPadX()`), `white-space: pre` mirror measurement, synchronous `syncActiveCalculationGhost()` execution on `input`, and in-place DOM prefix mutation via `getCalculationGhost(rawLine)`. Ghost answer remains 100% stationary when typing `Space` or `=`, solidifying naturally into the note.
+  - Committed in `e801b1e`: `fix(editor): solidify ghost autocomplete in place without shifting on space`.
+  - Independent audit by `gsd-verifier` passed all 6 must-haves across 154 unit & integration tests, TypeScript typechecking, UI bundling, and Tauri check.
 
 ## Next Steps
 
-1. Batch commit Phase 9 changes: `feat(phase-9): suppress trivial numbers, fix ghost equals stepping, and add rich clipboard copy`.
-2. Await user feedback or proceed to settings panel redesign when ready.
+1. Await user feedback or proceed to settings panel redesign when ready.
 
 ## Active Decisions
 

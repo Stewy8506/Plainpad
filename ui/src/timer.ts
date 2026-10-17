@@ -86,15 +86,9 @@ let alertDismissBtnEl: HTMLButtonElement | null = null;
 
 export function playTimerChime(soundFile: string): void {
   if (!soundEnabled) return;
-  try {
-    const audio = new Audio('./sounds/' + soundFile);
-    audio.play().catch((err) => {
-      // Browsers may block audio if no prior user interaction
-      console.debug('[Timer] Audio chime play deferred or blocked:', err);
-    });
-  } catch (err) {
-    console.debug('[Timer] Failed to initialize Audio:', err);
-  }
+  // Play sound natively through backend — completely avoids WebKitGTK
+  // GStreamer crashes in MediaPlayerPrivateGStreamer::createAudioSink()
+  invoke('play_sound', { sound: soundFile }).catch(() => {});
 }
 
 export function formatTimeDigits(ms: number): string {
@@ -348,16 +342,24 @@ export async function initTimerUI(): Promise<void> {
 
   await listen('timer-fired', (payload: unknown) => {
     const p = payload as { id: number; name: string; sound: string; overdue: boolean };
-    playTimerChime(p.sound || 'countdowndone.m4a');
 
-    // Pulse animation celebration
-    if (timerPillEl) {
-      timerPillEl.classList.add('timer-celebrate');
-      setTimeout(() => {
-        timerPillEl?.classList.remove('timer-celebrate');
-      }, 3000);
+    // 1. Immediately update visual digits to 00:00 and ring to completed
+    if (digitsEl) {
+      digitsEl.textContent = '00:00';
+    }
+    if (ringProgressEl) {
+      ringProgressEl.style.strokeDashoffset = '0';
     }
 
+    // 2. Pulse animation celebration
+    if (timerPillEl) {
+      timerPillEl.classList.add('timer-celebrate');
+    }
+
+    // 3. Play chime through native OS player
+    playTimerChime(p.sound || 'countdowndone.wav');
+
+    // 4. Alert modal if enabled
     if (fullScreenAlertEnabled) {
       showFullScreenAlert(
         "Time's Up!",
@@ -367,17 +369,19 @@ export async function initTimerUI(): Promise<void> {
       );
     }
 
+    // 5. Cleanly hide the pill after celebration (3 seconds)
     setTimeout(() => {
+      timerPillEl?.classList.remove('timer-celebrate');
       if (activeTimer?.id === p.id) {
         renderTimer(null);
       }
-    }, 3500);
+    }, 3000);
   });
 
   await listen('timer-phase-transition', (payload: unknown) => {
     const p = payload as { id: number; is_work_phase: boolean; cycle_count: number; sound: string };
     if (p.is_work_phase) {
-      playTimerChime(p.sound || 'backtowork.m4a');
+      playTimerChime(p.sound || 'backtowork.wav');
       if (fullScreenAlertEnabled) {
         showFullScreenAlert(
           'Break Finished!',
@@ -387,7 +391,7 @@ export async function initTimerUI(): Promise<void> {
         );
       }
     } else {
-      playTimerChime(p.sound || 'workdone.m4a');
+      playTimerChime(p.sound || 'workdone.wav');
       if (fullScreenAlertEnabled) {
         showFullScreenAlert(
           'Work Complete!',

@@ -840,7 +840,7 @@ fn get_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>) -
 }
 
 fn register_hotkey_internal(app: &AppHandle, hotkey_str: &str) -> Result<tauri_plugin_global_shortcut::Shortcut, String> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
     let parsed: Shortcut = hotkey_str
         .parse()
         .map_err(|e| format!("Failed to parse hotkey '{hotkey_str}': {e}"))?;
@@ -849,7 +849,10 @@ fn register_hotkey_internal(app: &AppHandle, hotkey_str: &str) -> Result<tauri_p
 
     let hotkey_handle = app.clone();
     app.global_shortcut()
-        .on_shortcut(parsed.clone(), move |_app, _shortcut, _event| {
+        .on_shortcut(parsed.clone(), move |_app, _shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
             if let Some(w) = hotkey_handle.get_webview_window("main") {
                 let is_vis = w.is_visible().unwrap_or(false);
                 let is_foc = w.is_focused().unwrap_or(false);
@@ -1236,26 +1239,97 @@ fn fetch_ai_models(
         .fetch_ai_models(&provider)
 }
 
+fn play_native_sound(sound_file: &str) {
+    let clean = sound_file
+        .trim_end_matches(".m4a")
+        .trim_end_matches(".wav")
+        .trim_end_matches(".mp3")
+        .trim_end_matches(".ogg");
+
+    let clean = clean.to_string();
+    let original = sound_file.to_string();
+
+    std::thread::spawn(move || {
+        let candidates = [
+            format!("ui/dist/sounds/{clean}.wav"),
+            format!("ui/sounds/{clean}.wav"),
+            format!("ui/dist/sounds/{original}"),
+            format!("ui/sounds/{original}"),
+        ];
+
+        let found_path = candidates.into_iter().find(|p| std::path::Path::new(p).exists());
+
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(ref path) = found_path {
+                if let Ok(mut child) = std::process::Command::new("pw-play").arg(path).spawn() {
+                    let _ = child.wait();
+                    return;
+                }
+                if let Ok(mut child) = std::process::Command::new("paplay").arg(path).spawn() {
+                    let _ = child.wait();
+                    return;
+                }
+                if let Ok(mut child) = std::process::Command::new("aplay").arg("-q").arg(path).spawn() {
+                    let _ = child.wait();
+                    return;
+                }
+            }
+            let _ = std::process::Command::new("canberra-gtk-play")
+                .arg("-i")
+                .arg("complete")
+                .spawn();
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(ref path) = found_path {
+                let _ = std::process::Command::new("afplay").arg(path).spawn();
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(ref path) = found_path {
+                let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", path.replace('/', "\\"));
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-Command", &script])
+                    .spawn();
+            }
+        }
+    });
+}
+
+#[tauri::command]
+fn play_sound(sound: String) {
+    play_native_sound(&sound);
+}
+
 // ---------- main ----------
 
 fn main() {
+    eprintln!("[Plainpad] 1. Process started.");
     #[cfg(target_os = "linux")]
     {
         // Avoid WebKitGTK 2.40+ hardware dmabuf compositing crash / blank screen on Linux Wayland/X11
         if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
+        eprintln!("[Plainpad] 2. Linux environment configured.");
     }
 
     let dir = data_dir();
+    eprintln!("[Plainpad] 3. Data directory: {:?}", dir);
     let db_path = dir.join("plainpad.db");
+    eprintln!("[Plainpad] 4. Opening SQLite store at: {:?}", db_path);
     let store = Arc::new(
         plainpad_core::store::SqliteStore::open(&db_path)
             .expect("Failed to initialize SQLite store"),
     );
-    store.ensure_slotted_notes().expect("Failed to initialize slotted notes");
+    eprintln!("[Plainpad] 5. SQLite store opened.");
     let timer_path = dir.join("state/timers.json");
     let (timers, overdue) = plainpad_core::timers::TimerEngine::load(&timer_path);
+    eprintln!("[Plainpad] 6. Timers loaded.");
 
     tauri::Builder::default()
         .on_window_event(|window, event| {
@@ -1283,48 +1357,43 @@ fn main() {
             let handle = app.handle().clone();
 
             let state = app.state::<Mutex<AppState>>();
-            let geo = state
-                .lock()
-                .unwrap()
-                .store
-                .get_setting("geometry")
-                .ok()
-                .flatten()
-                .unwrap_or(serde_json::json!({}));
-            let w = geo.get("width").and_then(|v| v.as_f64()).unwrap_or(520.0);
-            let h = geo.get("height").and_then(|v| v.as_f64()).unwrap_or(600.0);
-            let x = geo.get("x").and_then(|v| v.as_f64());
-            let y = geo.get("y").and_then(|v| v.as_f64());
-
-            let restore_pin = state
-                .lock()
-                .unwrap()
-                .store
-                .get_setting("restorePinOnOpen")
-                .ok()
-                .flatten()
-                .or_else(|| state.lock().unwrap().store.get_setting("restore_pin").ok().flatten())
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-
-            let is_pinned = if restore_pin {
-                state
-                    .lock()
-                    .unwrap()
+            let (w, h, x, y, is_pinned) = {
+                let s = state.lock().unwrap();
+                let geo = s
                     .store
-                    .get_setting("_lastPinState")
+                    .get_setting("geometry")
                     .ok()
                     .flatten()
-                    .or_else(|| state.lock().unwrap().store.get_setting("always_on_top").ok().flatten())
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-            } else {
-                false
-            };
+                    .unwrap_or(serde_json::json!({}));
+                let w = geo.get("width").and_then(|v| v.as_f64()).unwrap_or(520.0);
+                let h = geo.get("height").and_then(|v| v.as_f64()).unwrap_or(600.0);
+                let x = geo.get("x").and_then(|v| v.as_f64());
+                let y = geo.get("y").and_then(|v| v.as_f64());
 
-            if !restore_pin {
-                let _ = state.lock().unwrap().store.set_setting("always_on_top", serde_json::Value::Bool(false));
-            }
+                let restore_pin = s
+                    .store
+                    .get_setting("restorePinOnOpen")
+                    .ok()
+                    .flatten()
+                    .or_else(|| s.store.get_setting("restore_pin").ok().flatten())
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                let is_pinned = if restore_pin {
+                    s.store
+                        .get_setting("_lastPinState")
+                        .ok()
+                        .flatten()
+                        .or_else(|| s.store.get_setting("always_on_top").ok().flatten())
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                } else {
+                    let _ = s.store.set_setting("always_on_top", serde_json::Value::Bool(false));
+                    false
+                };
+
+                (w, h, x, y, is_pinned)
+            };
 
             let is_transparent = if cfg!(target_os = "linux") {
                 std::env::var("PLAINPAD_TRANSPARENT").map(|v| v == "1" || v == "true").unwrap_or(false)
@@ -1332,21 +1401,45 @@ fn main() {
                 true
             };
 
-            let mut builder = WebviewWindowBuilder::new(&handle, "main", tauri::WebviewUrl::App("index.html".into()))
-                .title("Plainpad")
-                .inner_size(w, h)
-                .decorations(false)
-                .transparent(is_transparent)
-                .always_on_top(is_pinned)
-                .skip_taskbar(false)
-                .visible(true)
-                .resizable(true);
+            eprintln!("[Plainpad] 7. Obtaining main window...");
+            let win = if let Some(existing) = app.get_webview_window("main") {
+                eprintln!("[Plainpad] 8. Found pre-configured window from tauri.conf.json.");
+                existing
+            } else {
+                eprintln!("[Plainpad] 8. Building main window dynamically...");
+                let mut builder = WebviewWindowBuilder::new(&handle, "main", tauri::WebviewUrl::App("index.html".into()))
+                    .title("Plainpad")
+                    .inner_size(w, h)
+                    .decorations(false)
+                    .transparent(is_transparent)
+                    .always_on_top(is_pinned)
+                    .skip_taskbar(false)
+                    .visible(true)
+                    .resizable(true);
+
+                if let (Some(px), Some(py)) = (x, y) {
+                    builder = builder.position(px, py);
+                } else {
+                    builder = builder.center();
+                }
+                builder.build()?
+            };
 
             if let (Some(px), Some(py)) = (x, y) {
-                builder = builder.position(px, py);
+                let _ = win.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(px, py)));
+            } else {
+                let _ = win.center();
             }
-
-            let _win = builder.build()?;
+            let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+            let _ = win.set_always_on_top(is_pinned);
+            let _ = win.show();
+            let _ = win.unminimize();
+            let _ = win.set_focus();
+            #[cfg(debug_assertions)]
+            {
+                win.open_devtools();
+            }
+            eprintln!("[Plainpad] 9. Main window presented ({}x{}, pinned={}, transparent={}).", w, h, is_pinned, is_transparent);
 
             // Tray icon
             let icon_bytes = include_bytes!("../icons/icon.png");
@@ -1454,9 +1547,16 @@ fn main() {
                     .and_then(|v| v.as_str().map(|s| s.to_string()))
                     .unwrap_or_else(|| "Ctrl+Space".to_string())
             };
-            if let Err(e) = register_hotkey_internal(&handle, &hotkey_str) {
-                eprintln!("[Hotkey] Warning: Could not register global shortcut '{hotkey_str}': {e}");
-            }
+            let hotkey_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                // Yield briefly to ensure setup finishes and the event loop starts
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                if let Err(e) = register_hotkey_internal(&hotkey_handle, &hotkey_str) {
+                    eprintln!("[Hotkey] Warning: Could not register global shortcut '{hotkey_str}': {e}");
+                } else {
+                    println!("[Plainpad] Registered global summon hotkey: {hotkey_str}");
+                }
+            });
 
             // Fire overdue timers (expired while app was closed)
             for t in &overdue {
@@ -1479,11 +1579,29 @@ fn main() {
                             let _ = fire_handle.emit("timer-fired", serde_json::json!({
                                 "id": id, "name": name, "sound": sound, "overdue": overdue
                             }));
+                            play_native_sound(&sound);
+                            use tauri_plugin_notification::NotificationExt;
+                            let title = if name.is_empty() { "Plainpad Timer" } else { &name };
+                            let body = if overdue {
+                                format!("{title} (missed while away)")
+                            } else {
+                                format!("{title} finished!")
+                            };
+                            let _ = fire_handle.notification().builder().title(title).body(&body).show();
                         }
                         plainpad_core::timers::TimerEvent::PhaseTransition { id, is_work_phase, cycle_count, sound } => {
                             let _ = fire_handle.emit("timer-phase-transition", serde_json::json!({
                                 "id": id, "is_work_phase": is_work_phase, "cycle_count": cycle_count, "sound": sound
                             }));
+                            play_native_sound(&sound);
+                            use tauri_plugin_notification::NotificationExt;
+                            let title = if is_work_phase { "Break Finished" } else { "Work Complete" };
+                            let body = if is_work_phase {
+                                format!("Starting work cycle {cycle_count}")
+                            } else {
+                                format!("Completed work cycle {cycle_count}. Time for a break!")
+                            };
+                            let _ = fire_handle.notification().builder().title(title).body(&body).show();
                         }
                     }
                 });
@@ -1544,6 +1662,7 @@ fn main() {
                 }
             });
 
+            eprintln!("[Plainpad] 11. Setup hook finished successfully.");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1623,6 +1742,7 @@ fn main() {
             set_extension_preference,
             fetch_ai_models,
             register_global_hotkey,
+            play_sound,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");

@@ -796,6 +796,13 @@ fn toggle_maximize(app: AppHandle) {
 }
 
 #[tauri::command]
+fn start_dragging(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.start_dragging();
+    }
+}
+
+#[tauri::command]
 fn toggle_always_on_top(app: AppHandle, state: tauri::State<'_, Mutex<AppState>>) -> Result<bool, String> {
     if let Some(w) = app.get_webview_window("main") {
         let s = state.lock().unwrap();
@@ -1702,6 +1709,7 @@ fn main() {
             minimize_window,
             hide_window,
             toggle_maximize,
+            start_dragging,
             toggle_always_on_top,
             get_always_on_top,
             get_rates_info,

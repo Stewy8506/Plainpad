@@ -2794,6 +2794,32 @@ btnClose?.addEventListener('click', async () => {
   invoke('hide_window');
 });
 
+// Top bar window dragging and maximize toggle
+const topBar = document.getElementById('top-bar');
+if (topBar) {
+  topBar.addEventListener('mousedown', (e) => {
+    // Only primary (left) button and don't drag if clicking buttons, inputs, badges or note index
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, input, select, textarea, .chrome-btn, .readonly-badge, .note-index')) {
+      return;
+    }
+    invoke('start_dragging').catch(() => {
+      try {
+        win.__TAURI__?.window?.getCurrentWindow()?.startDragging();
+      } catch (_) {}
+    });
+  });
+
+  topBar.addEventListener('dblclick', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest('button, input, select, textarea, .chrome-btn')) {
+      return;
+    }
+    invoke('toggle_maximize').catch(console.error);
+  });
+}
+
 // Window geometry persistence
 let geoTimeout: ReturnType<typeof setTimeout> | null = null;
 function saveGeometry(): void {

@@ -1235,9 +1235,17 @@ function updateBackdrop(): void {
       'sum', 'total', 'add', 'avg', 'average', 'math', 'calcs',
       'convert', 'count', 'list', 'check', 'todo', 'code', 'paste', 'timer',
     ];
-    const firstWord = lower.split(/[\s:]/)[0];
-    if (triggerKws.includes(firstWord)) {
-      return `<span class="hl-mode hl-mode-trigger hl-mode-${firstWord}">${formatText(line, startOffset)}</span>`;
+    const triggerMatch = line.match(/^(\s*)([a-zA-Z]+)(.*)$/);
+    if (triggerMatch) {
+      const leading = triggerMatch[1];
+      const word = triggerMatch[2];
+      const rest = triggerMatch[3];
+      const wordLower = word.toLowerCase();
+      if (triggerKws.includes(wordLower)) {
+        const wordOffset = startOffset + leading.length;
+        const restOffset = wordOffset + word.length;
+        return `${escapeHtml(leading)}<span class="hl-mode hl-mode-trigger hl-mode-${wordLower}">${formatText(word, wordOffset)}</span>${formatText(rest, restOffset)}`;
+      }
     }
 
     // Variable / label lines: e.g. "trees: 23,405" or "rent = 12000"

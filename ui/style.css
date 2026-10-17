@@ -590,7 +590,7 @@ button.button-glass:active {
 /* ---------- Syntax Highlighting in Backdrop ---------- */
 .hl-mode {
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: normal;
 }
 .hl-mode-math  { color: var(--hl-math); }
 .hl-mode-calcs { color: var(--hl-calcs); }

@@ -638,6 +638,7 @@ button.button-glass:active {
   font-weight: 500;
   opacity: 0.92;
   overflow: visible !important;
+  white-space: pre !important;
 }
 
 /* Conversion result: muted desaturated sage */
@@ -646,14 +647,15 @@ button.button-glass:active {
   font-weight: 500;
   opacity: 0.92;
   overflow: visible !important;
+  white-space: pre !important;
 }
 
 /* Kinetic Prefix styling */
 .anno-prefix {
   color: var(--anno-prefix);
   font-weight: 300;
-  margin-right: 0.25em;
   display: inline-block;
+  white-space: pre;
 }
 
 /* Active drag/text selection highlight synchronization */

@@ -1274,14 +1274,87 @@ let activeAnnoCache = new Map<string, string>();
 // Suppress kinetic animations during app startup, note loading, and note switching
 let skipKineticAnimation = false;
 
+function getEditorPadX(): number {
+  if (!editor) return 24;
+  const pl = parseFloat(window.getComputedStyle(editor).paddingLeft);
+  return Number.isFinite(pl) && pl > 0 ? pl : 24;
+}
+
+function getCalculationGhost(rawLine: string): { prefix: string; hasTrailingEquals: boolean } {
+  // 1. User typed '=' or '?' followed by one or more spaces (e.g. "200 inr to cad = " or "200 inr to cad= ")
+  if (/\s*[=?]\s+$/.test(rawLine)) {
+    return { prefix: '', hasTrailingEquals: true };
+  }
+  // 2. User typed '=' or '?' without trailing spaces (e.g. "200 inr to cad =" or "200 inr to cad=")
+  if (/\s*[=?]$/.test(rawLine)) {
+    return { prefix: ' ', hasTrailingEquals: true };
+  }
+  // 3. User typed one or more trailing spaces after expression (e.g. "200 inr to cad ")
+  if (/\s+$/.test(rawLine)) {
+    return { prefix: '= ', hasTrailingEquals: false };
+  }
+  // 4. Default: raw expression without trailing space or equals (e.g. "200 inr to cad")
+  return { prefix: ' = ', hasTrailingEquals: false };
+}
+
+function syncActiveCalculationGhost(): void {
+  if (!lastAnalysis?.annotations) return;
+  const cursor = editor.selectionStart;
+  const text = editor.value;
+  const cursorLine = text.substring(0, cursor).split('\n').length - 1;
+  const anno = lastAnalysis.annotations.find(
+    (a) => a.line === cursorLine && (a.kind === 'math' || a.kind === 'conversion') && a.value
+  );
+  if (!anno) return;
+
+  const annoKey = `${cursorLine}:${anno.kind}`;
+  const el = overlay.querySelector(`[data-anno-key="${annoKey}"]`) as HTMLElement | null;
+  if (!el || el.classList.contains('kinetic-exiting')) return;
+
+  const lines = text.split('\n');
+  const rawLine = lines[cursorLine] || '';
+  const lineText = rawLine.trim();
+  if (lineText.length === 0) return;
+
+  const calcGhost = getCalculationGhost(rawLine);
+  el.classList.toggle('has-equals', calcGhost.hasTrailingEquals);
+
+  const prefixEl = el.querySelector('.anno-prefix') as HTMLElement | null;
+  if (prefixEl) {
+    prefixEl.textContent = calcGhost.prefix;
+    prefixEl.style.display = calcGhost.prefix ? 'inline-block' : 'none';
+  }
+
+  const padX = getEditorPadX();
+  const tempSpan = document.createElement('span');
+  tempSpan.textContent = rawLine || ' ';
+  tempSpan.style.display = 'inline-block';
+  tempSpan.style.whiteSpace = 'pre';
+  mirror.appendChild(tempSpan);
+  const textWidth = tempSpan.offsetWidth;
+  tempSpan.remove();
+
+  const maxOffset = Math.max(padX, editor.clientWidth - 130);
+  const offset = Math.min(padX + textWidth, maxOffset);
+
+  if (forceRTL) {
+    el.style.right = `${offset}px`;
+    el.style.left = '';
+  } else {
+    el.style.left = `${offset}px`;
+    el.style.right = '';
+  }
+}
+
 function renderKineticContent(parent: HTMLElement, prefix: string, text: string, isNew: boolean): void {
   if (!isNew) {
-    if (prefix) {
-      const p = document.createElement('span');
-      p.className = 'anno-prefix';
-      p.textContent = prefix;
-      parent.appendChild(p);
+    const p = document.createElement('span');
+    p.className = 'anno-prefix';
+    p.textContent = prefix;
+    if (!prefix) {
+      p.style.display = 'none';
     }
+    parent.appendChild(p);
     parent.appendChild(document.createTextNode(text));
     return;
   }
@@ -1290,13 +1363,14 @@ function renderKineticContent(parent: HTMLElement, prefix: string, text: string,
   container.className = 'kinetic-container';
   let wordIndex = 0;
 
-  if (prefix) {
-    const p = document.createElement('span');
-    p.className = 'kinetic-word anno-prefix';
-    p.style.setProperty('--word-index', String(wordIndex++));
-    p.textContent = prefix;
-    container.appendChild(p);
+  const p = document.createElement('span');
+  p.className = 'kinetic-word anno-prefix';
+  p.style.setProperty('--word-index', String(wordIndex++));
+  p.textContent = prefix;
+  if (!prefix) {
+    p.style.display = 'none';
   }
+  container.appendChild(p);
 
   // Tokenize by whitespace so each word receives fluid kinetic stagger
   const tokens = text.split(/(\s+)/);
@@ -1358,7 +1432,7 @@ function triggerExit(el: HTMLElement): void {
 
 function renderOverlay(analysis: Analysis, text: string): void {
   const lines = text.split('\n');
-  const padX = 20; // var(--pad-x)
+  const padX = getEditorPadX();
 
   // Sync scroll position with textarea
   overlay.style.top = `-${editor.scrollTop}px`;
@@ -1372,6 +1446,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
     const span = document.createElement('span');
     span.textContent = lines[i] || ' ';
     span.style.display = 'inline-block';
+    span.style.whiteSpace = 'pre';
     row.appendChild(span);
     mirror.appendChild(row);
     lineEls.push(row);
@@ -1399,9 +1474,11 @@ function renderOverlay(analysis: Analysis, text: string): void {
     const lineText = rawLine.trim();
 
     // Inline horizontal position: placed right after typed text with clean spacing
+    const isCalculation = anno.kind === 'math' || anno.kind === 'conversion';
     const textWidth = lineText.length > 0 ? textSpan.offsetWidth : 0;
     const maxOffset = Math.max(padX, editor.clientWidth - 130);
-    const offset = Math.min(padX + textWidth + 10, maxOffset);
+    const gap = isCalculation ? 0 : 10;
+    const offset = Math.min(padX + textWidth + gap, maxOffset);
 
     const applyPos = (targetEl: HTMLElement) => {
       if (forceRTL) {
@@ -1413,20 +1490,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
       }
     };
 
-    const hasTrailingEquals = lineText.endsWith('=') || lineText.endsWith('?');
-    const annoKey = (anno.kind === 'math' || anno.kind === 'conversion')
-      ? `${anno.line}:${anno.kind}:${hasTrailingEquals ? 'eq' : 'noeq'}`
-      : `${anno.line}:${anno.kind}`;
-    const altKey = (anno.kind === 'math' || anno.kind === 'conversion')
-      ? `${anno.line}:${anno.kind}:${hasTrailingEquals ? 'noeq' : 'eq'}`
-      : null;
-    if (altKey) {
-      const altEl = existingEls.get(altKey);
-      if (altEl) {
-        altEl.remove();
-        existingEls.delete(altKey);
-      }
-    }
+    const annoKey = `${anno.line}:${anno.kind}`;
     const annoValue = String(anno.value || anno.chip || '');
     const isNew = !skipKineticAnimation && (activeAnnoCache.get(annoKey) !== annoValue);
     nextAnnoCache.set(annoKey, annoValue);
@@ -1460,6 +1524,17 @@ function renderOverlay(analysis: Analysis, text: string): void {
           }
         }
       }
+
+      if (isCalculation) {
+        const calcGhost = getCalculationGhost(rawLine);
+        prevEl.classList.toggle('has-equals', calcGhost.hasTrailingEquals);
+        const prefixEl = prevEl.querySelector('.anno-prefix') as HTMLElement | null;
+        if (prefixEl) {
+          prefixEl.textContent = calcGhost.prefix;
+          prefixEl.style.display = calcGhost.prefix ? 'inline-block' : 'none';
+        }
+      }
+
       existingEls.delete(annoKey);
       continue;
     }
@@ -1474,12 +1549,12 @@ function renderOverlay(analysis: Analysis, text: string): void {
 
     if (anno.kind === 'math' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      el.className = `anno anno-math${hasTrailingEquals ? ' has-equals' : ''}`;
+      const calcGhost = getCalculationGhost(rawLine);
+      el.className = `anno anno-math${calcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
-      const prefix = hasTrailingEquals ? '' : '= ';
       const formatted = formatNumber(anno.value);
-      renderKineticContent(el, prefix, formatted, isNew);
+      renderKineticContent(el, calcGhost.prefix, formatted, isNew);
       el.title = `${anno.why} (Click to copy answer)`;
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1487,11 +1562,11 @@ function renderOverlay(analysis: Analysis, text: string): void {
       });
     } else if (anno.kind === 'conversion' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      el.className = `anno anno-conversion${hasTrailingEquals ? ' has-equals' : ''}`;
+      const calcGhost = getCalculationGhost(rawLine);
+      el.className = `anno anno-conversion${calcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
-      const prefix = hasTrailingEquals ? '' : '= ';
-      renderKineticContent(el, prefix, anno.value, isNew);
+      renderKineticContent(el, calcGhost.prefix, anno.value, isNew);
       el.title = `${anno.why} (Click to copy answer)`;
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2155,6 +2230,7 @@ document.addEventListener('selectionchange', () => {
 
 editor.addEventListener('input', () => {
   updateBackdrop();
+  syncActiveCalculationGhost();
   syncOverlaySelection();
   scheduleSave();
   scheduleAnalyze();
@@ -2382,6 +2458,7 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
         editor.selectionStart = editor.selectionEnd = lineEnd + insertText.length;
       }
       updateBackdrop();
+      syncActiveCalculationGhost();
       scheduleSave();
       scheduleAnalyze();
       return;

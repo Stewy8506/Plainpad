@@ -203,21 +203,6 @@ Antinote features a complete inline timer and alarm subsystem:
   - `timerPomoShowFullScreenAlert`: Full-screen modal overlay option (`TimerCompleteAlertView`).
   - `pauseTheTimerIfAppClosed`: Pauses timers if app is hidden or closed.
 
-### 6.3 Pomodoro Break Screen & Fullscreen Takeover (`BreakTimeView`)
-When a Pomodoro work phase finishes and break begins (or when `timerPomoShowFullScreenAlert` is enabled):
-1. **Fullscreen Desktop Takeover**:
-   - Tauri window summons/expands to borderless fullscreen always-on-top, immersing the display with dark atmospheric frosted glass (`backdrop-filter: blur(48px)`), radial vignette, and subtle ambient magenta/violet lighting.
-2. **Visual Layout & Iconography**:
-   - Centered mint-green line-art orbit illustration (`#4ade80`).
-   - "Break Time" headline with tracked uppercase category badge (`WILDLIFE FACT-FILE`, `SPACE TRIVIA`, `MINDFUL MOMENTS`).
-   - Rotating local catalog of bite-sized wildlife facts and mindfulness thoughts (e.g. *"Ostriches can run faster than horses."*).
-   - Live interactive countdown (`Break time remaining: [ || ] mm:ss`) synchronized in real-time with backend `TimerEngine` break phase.
-3. **"Sneak a Peek" & "No-Peek Streak" Gamification**:
-   - "Sneak a peek" button temporarily minimizes or un-blurs the overlay so the user can inspect their screen if urgent.
-   - "End Pomodoro" button aborts the session.
-   - Persistent SQLite streak tracker: `current_no_peek_streak` and `best_no_peek_streak`. Completing a break without peeking increments the streak; sneaking a peek resets current streak to 0 while preserving best record.
-   - Displays `No-Peek Streak: X (Best: Y)` with golden accent numbers.
-
 ---
 
 ## 7. Editor Capabilities & Rich Inline Elements

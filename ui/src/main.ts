@@ -1273,6 +1273,17 @@ function updateBackdrop(): void {
 let activeAnnoCache = new Map<string, string>();
 // Suppress kinetic animations during app startup, note loading, and note switching
 let skipKineticAnimation = false;
+let lastCursorLine = -1;
+
+function checkCursorLineChange(): void {
+  if (!editor || !lastAnalysis) return;
+  const cursor = editor.selectionStart;
+  const cursorLine = editor.value.substring(0, cursor).split('\n').length - 1;
+  if (cursorLine !== lastCursorLine) {
+    lastCursorLine = cursorLine;
+    renderOverlay(lastAnalysis, editor.value);
+  }
+}
 
 function getEditorPadX(): number {
   if (!editor) return 24;
@@ -1433,6 +1444,9 @@ function triggerExit(el: HTMLElement): void {
 function renderOverlay(analysis: Analysis, text: string): void {
   const lines = text.split('\n');
   const padX = getEditorPadX();
+  const cursor = editor ? editor.selectionStart : -1;
+  const cursorLine = (cursor >= 0 && editor) ? text.substring(0, cursor).split('\n').length - 1 : -1;
+  lastCursorLine = cursorLine;
 
   // Sync scroll position with textarea
   overlay.style.top = `-${editor.scrollTop}px`;
@@ -1475,6 +1489,20 @@ function renderOverlay(analysis: Analysis, text: string): void {
 
     // Inline horizontal position: placed right after typed text with clean spacing
     const isCalculation = anno.kind === 'math' || anno.kind === 'conversion';
+    const calcGhost = isCalculation ? getCalculationGhost(rawLine) : null;
+    const annoKey = `${anno.line}:${anno.kind}`;
+
+    // Ephemeral ghost completions: If this is an uncommitted calculation (no trailing '=' or '?')
+    // and the cursor is NOT on this line, do not render or keep the ghost autocomplete!
+    if (isCalculation && calcGhost && !calcGhost.hasTrailingEquals && anno.line !== cursorLine) {
+      const prevEl = existingEls.get(annoKey);
+      if (prevEl) {
+        triggerExit(prevEl);
+        existingEls.delete(annoKey);
+      }
+      continue;
+    }
+
     const textWidth = lineText.length > 0 ? textSpan.offsetWidth : 0;
     const maxOffset = Math.max(padX, editor.clientWidth - 130);
     const gap = isCalculation ? 0 : 10;
@@ -1490,7 +1518,6 @@ function renderOverlay(analysis: Analysis, text: string): void {
       }
     };
 
-    const annoKey = `${anno.line}:${anno.kind}`;
     const annoValue = String(anno.value || anno.chip || '');
     const isNew = !skipKineticAnimation && (activeAnnoCache.get(annoKey) !== annoValue);
     nextAnnoCache.set(annoKey, annoValue);
@@ -1525,8 +1552,7 @@ function renderOverlay(analysis: Analysis, text: string): void {
         }
       }
 
-      if (isCalculation) {
-        const calcGhost = getCalculationGhost(rawLine);
+      if (isCalculation && calcGhost) {
         prevEl.classList.toggle('has-equals', calcGhost.hasTrailingEquals);
         const prefixEl = prevEl.querySelector('.anno-prefix') as HTMLElement | null;
         if (prefixEl) {
@@ -1549,12 +1575,12 @@ function renderOverlay(analysis: Analysis, text: string): void {
 
     if (anno.kind === 'math' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      const calcGhost = getCalculationGhost(rawLine);
-      el.className = `anno anno-math${calcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
+      const currentCalcGhost = calcGhost || getCalculationGhost(rawLine);
+      el.className = `anno anno-math${currentCalcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
       const formatted = formatNumber(anno.value);
-      renderKineticContent(el, calcGhost.prefix, formatted, isNew);
+      renderKineticContent(el, currentCalcGhost.prefix, formatted, isNew);
       el.title = `${anno.why} (Click to copy answer)`;
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1562,11 +1588,11 @@ function renderOverlay(analysis: Analysis, text: string): void {
       });
     } else if (anno.kind === 'conversion' && anno.confidence >= 0.85 && anno.value) {
       el = document.createElement('div');
-      const calcGhost = getCalculationGhost(rawLine);
-      el.className = `anno anno-conversion${calcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
+      const currentCalcGhost = calcGhost || getCalculationGhost(rawLine);
+      el.className = `anno anno-conversion${currentCalcGhost.hasTrailingEquals ? ' has-equals' : ''}`;
       el.style.top = `${top}px`;
       applyPos(el);
-      renderKineticContent(el, calcGhost.prefix, anno.value, isNew);
+      renderKineticContent(el, currentCalcGhost.prefix, anno.value, isNew);
       el.title = `${anno.why} (Click to copy answer)`;
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2199,11 +2225,12 @@ editor.addEventListener('copy', (e: ClipboardEvent) => {
       );
       if (anno) {
         hasEnhancedAnyLine = true;
+        const answer = anno.kind === 'math' ? formatNumber(anno.value) : anno.value;
         const trimmedSlice = lineSlice.trimEnd();
         if (trimmedSlice.endsWith('=') || trimmedSlice.endsWith('?')) {
-          lineSlice = `${trimmedSlice} ${anno.value}`;
+          lineSlice = `${trimmedSlice} ${answer}`;
         } else {
-          lineSlice = `${trimmedSlice} = ${anno.value}`;
+          lineSlice = `${trimmedSlice} = ${answer}`;
         }
       }
     }
@@ -2217,12 +2244,25 @@ editor.addEventListener('copy', (e: ClipboardEvent) => {
   }
 });
 
-editor.addEventListener('select', syncOverlaySelection);
-editor.addEventListener('mouseup', syncOverlaySelection);
-editor.addEventListener('keyup', syncOverlaySelection);
+editor.addEventListener('select', () => {
+  syncOverlaySelection();
+  checkCursorLineChange();
+});
+editor.addEventListener('mouseup', () => {
+  syncOverlaySelection();
+  checkCursorLineChange();
+});
+editor.addEventListener('keyup', () => {
+  syncOverlaySelection();
+  checkCursorLineChange();
+});
+editor.addEventListener('click', () => {
+  checkCursorLineChange();
+});
 document.addEventListener('selectionchange', () => {
   if (document.activeElement === editor) {
     syncOverlaySelection();
+    checkCursorLineChange();
   }
 });
 
@@ -2230,6 +2270,7 @@ document.addEventListener('selectionchange', () => {
 
 editor.addEventListener('input', () => {
   updateBackdrop();
+  checkCursorLineChange();
   syncActiveCalculationGhost();
   syncOverlaySelection();
   scheduleSave();
@@ -2440,25 +2481,28 @@ editor.addEventListener('keydown', (e: KeyboardEvent) => {
       return;
     }
 
-    // Calculation answer absorption (Tab steps into equals or commits answer)
+    // Calculation answer absorption (Tab finalizes the entire calculation and answer in one single press)
     const activeCalcAnno = lastAnalysis?.annotations?.find(
       (a) => a.line === cursorLine && (a.kind === 'math' || a.kind === 'conversion') && a.value
     );
     if (activeCalcAnno && cursor >= lineStart) {
       e.preventDefault();
       const rawCurLine = editor.value.substring(lineStart, lineEnd);
-      if (!rawCurLine.trim().endsWith('=') && !rawCurLine.trim().endsWith('?')) {
-        const separator = rawCurLine.endsWith(' ') ? '= ' : ' = ';
-        editor.value = editor.value.substring(0, lineEnd) + separator + editor.value.substring(lineEnd);
-        editor.selectionStart = editor.selectionEnd = lineEnd + separator.length;
-      } else {
-        const separator = rawCurLine.endsWith(' ') ? '' : ' ';
-        const insertText = separator + activeCalcAnno.value;
-        editor.value = editor.value.substring(0, lineEnd) + insertText + editor.value.substring(lineEnd);
-        editor.selectionStart = editor.selectionEnd = lineEnd + insertText.length;
+      const calcGhost = getCalculationGhost(rawCurLine);
+      const answer = activeCalcAnno.kind === 'math' ? formatNumber(activeCalcAnno.value) : activeCalcAnno.value;
+      const insertText = calcGhost.prefix + answer;
+      editor.value = editor.value.substring(0, lineEnd) + insertText + editor.value.substring(lineEnd);
+      editor.selectionStart = editor.selectionEnd = lineEnd + insertText.length;
+
+      // Cleanly remove the overlay ghost immediately so there is no duplicate ghost flicker
+      const annoKey = `${cursorLine}:${activeCalcAnno.kind}`;
+      const el = overlay.querySelector(`[data-anno-key="${annoKey}"]`) as HTMLElement | null;
+      if (el) {
+        triggerExit(el);
       }
+      activeAnnoCache.delete(annoKey);
+
       updateBackdrop();
-      syncActiveCalculationGhost();
       scheduleSave();
       scheduleAnalyze();
       return;

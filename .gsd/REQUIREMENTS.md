@@ -45,6 +45,7 @@ Comprehensive requirements derived directly from `.gsd/SPEC.md` and reverse engi
 | **REQ-28** | **Canvas Textures & Typography**: Background overlays (`dots`, `smallGrid`, `bigGrid`), sub-pixel vertical caret nudging, and RTL text layout. | SPEC §7, §9, §11 | 8 | Pending |
 | **REQ-29** | **Find & Replace Engine**: Search modal supporting `Contains`, `Starts With`, `Ends With`, `Exact Match`, case sensitivity, and highlighted match counts. | SPEC §9 | 8 | Pending |
 | **REQ-30** | **Third-Party Export Suite**: Direct export to Markdown, Plaintext, Obsidian (vault paths), Bear, Apple Notes, Notion, Custom URL templates, and bulk ZIP. | SPEC §10 | 8 | Pending |
+| **REQ-31** | **Pomodoro Break Screen & Fullscreen Takeover**: Immersive break screen with mint-green orbit vector icon, rotating Wildlife Fact-File / trivia catalog, live interactive break countdown, "Sneak a peek" temporary unblur action, persistent "No-Peek Streak" gamification in SQLite, and cross-platform desktop blur / fullscreen takeover window. | SPEC §6.3 | 10 | Pending |
 
 ---
 

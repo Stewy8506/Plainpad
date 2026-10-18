@@ -15,12 +15,13 @@ updated: 2026-10-17T15:46:00+05:30
 
 ## Last Action
 
-- Completed full execution and independent verification of **Phase 9: Editor Calculation UX Polish**:
-  - `crates/plainpad-core/src/intent.rs`: Suppressed trivial identity number evaluations (`20`, `1234.5`, `-5`, `20 =`, `$50`) via `is_trivial_bare_number()` and input/output identity matching, while preserving genuine math and currency expressions (`20 + 5`, `20 inr to usd`).
-  - `ui/src/main.ts` & `ui/styles.css` / `ui/style.css`: Implemented `syncOverlaySelection()` for real-time `.anno.is-selected` styling during drag-selection and a rich `copy` event interceptor that captures `expression = answer` into the system clipboard.
-  - `ui/src/main.ts` & `ui/styles.css`: Solved ghost autocomplete positioning and solidification UX. Replaced hardcoded `+ 10px` gap with stationary zero-gap positioning (`padX + textWidth`), dynamic editor padding measurement (`getEditorPadX()`), `white-space: pre` mirror measurement, synchronous `syncActiveCalculationGhost()` execution on `input`, and in-place DOM prefix mutation via `getCalculationGhost(rawLine)`. Ghost answer remains 100% stationary when typing `Space` or `=`, solidifying naturally into the note.
-  - Committed in `e801b1e`: `fix(editor): solidify ghost autocomplete in place without shifting on space`.
-  - Independent audit by `gsd-verifier` passed all 6 must-haves across 154 unit & integration tests, TypeScript typechecking, UI bundling, and Tauri check.
+- Completed and verified single-press Tab completion and cursor-scoped ephemeral ghost calculations:
+  - `ui/src/main.ts`: Implemented single-stroke Tab completion (`insertText = calcGhost.prefix + answer`) that instantly commits the full calculation and answer (e.g. `200 usd to inr` $\rightarrow$ `200 usd to inr = ₹19,015.14`) into the note buffer and advances the cursor to the end in one single press.
+  - `ui/src/main.ts`: Added cursor-scoped ephemeral visibility for uncommitted ghost calculations (`!calcGhost.hasTrailingEquals`). Ghosts only appear on the line the cursor is currently editing. Moving away to another line cleanly dismisses the ghost; navigating back immediately reveals it. Explicit calculations ending in `=` or `?` remain permanently visible across all lines.
+  - `ui/src/main.ts`: Wired `checkCursorLineChange()` to `select`, `mouseup`, `keyup`, `click`, `selectionchange`, and `input` events for zero-delay overlay synchronization.
+  - `ui/src/main.ts`: Enhanced clipboard copy handler to format math answers with `formatNumber(anno.value)`.
+  - Independent audit by `gsd-verifier` passed all verification criteria (all 154 Rust tests pass, TypeScript clean, UI bundle clean, Tauri check clean).
+  - Committed in `d66db51`: `feat(editor): single-press tab completion and cursor-scoped ephemeral ghost calculations`.
 
 ## Next Steps
 

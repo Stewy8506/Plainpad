@@ -42,6 +42,20 @@ pub struct TrashEntry {
     pub deleted_at_ms: u64,
 }
 
+/// Curated trivia fact or mindfulness thought for Pomodoro Break View.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct BreakFact {
+    pub category: String,
+    pub text: String,
+}
+
+const BREAK_FACTS_RAW: &str = include_str!("../resources/break_facts.json");
+
+/// Returns the embedded offline catalog of categorized break facts.
+pub fn get_break_facts() -> Vec<BreakFact> {
+    serde_json::from_str(BREAK_FACTS_RAW).unwrap_or_default()
+}
+
 /// Wall-clock milliseconds since the Unix epoch.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()

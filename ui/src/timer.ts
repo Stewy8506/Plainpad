@@ -1,6 +1,27 @@
 // Plainpad — Timer & Pomodoro Pill UI (TimerView)
 // Circular SVG progress, work/break indicators, hover controls, sound alerts, and full-screen overlay.
 
+import {
+  initBreakView,
+  showBreakTimeView as showBreakTimeViewModule,
+  hideBreakTimeView as hideBreakTimeViewModule,
+  updateBreakCountdown,
+  updateStreakDisplay,
+  refreshStreak,
+  getHasPeeked,
+  resetPeekStatus,
+  completeBreakStreak,
+  type BreakFact,
+} from './break_view.js';
+
+export {
+  initBreakView,
+  updateBreakCountdown,
+  updateStreakDisplay,
+  refreshStreak,
+  type BreakFact,
+};
+
 export type TimerType = 'Stopwatch' | 'Countdown' | 'Pomodoro';
 
 export interface Timer {
@@ -84,6 +105,14 @@ let alertSummaryEl: HTMLElement | null = null;
 let alertActionBtnEl: HTMLButtonElement | null = null;
 let alertDismissBtnEl: HTMLButtonElement | null = null;
 
+export async function showBreakTimeView(timer: Timer): Promise<void> {
+  await showBreakTimeViewModule(timer.remaining_ms, timer.is_paused);
+}
+
+export function hideBreakTimeView(): void {
+  hideBreakTimeViewModule();
+}
+
 export function playTimerChime(soundFile: string): void {
   if (!soundEnabled) return;
   // Play sound natively through backend — completely avoids WebKitGTK
@@ -125,6 +154,8 @@ export function hideFullScreenAlert(): void {
 }
 
 export function clearTimer(): void {
+  invoke('exit_break_fullscreen').catch(() => {});
+  hideBreakTimeView();
   renderTimer(null);
 }
 
@@ -194,6 +225,11 @@ export function renderTimer(timer: Timer | null): void {
     const offset = CIRCUMFERENCE * (1 - progress);
     ringProgressEl.style.strokeDashoffset = `${offset.toFixed(2)}`;
   }
+
+  // Synchronize Break Time View countdown if Pomodoro break is active
+  if (timer.timer_type === 'Pomodoro' && !timer.is_work_phase && !timer.fired) {
+    updateBreakCountdown(timer.remaining_ms, timer.is_paused);
+  }
 }
 
 export async function initTimerUI(): Promise<void> {
@@ -261,6 +297,24 @@ export async function initTimerUI(): Promise<void> {
     }
   });
 
+  // Initialize High-Fidelity Break Time View
+  initBreakView({
+    onCancelTimer: () => {
+      renderTimer(null);
+    },
+    onTogglePause: async () => {
+      try {
+        const updated = await invoke<Timer | null>('pause_resume_timer');
+        if (updated) {
+          renderTimer(updated);
+          updateBreakCountdown(updated.remaining_ms, updated.is_paused);
+        }
+      } catch (err) {
+        console.error('[Timer] Failed to toggle break pause/resume:', err);
+      }
+    },
+  });
+
   // Clicking the pill itself toggles pause/resume
   timerPillEl?.addEventListener('click', async (e) => {
     if ((e.target as HTMLElement).closest('.timer-controls')) return;
@@ -295,7 +349,11 @@ export async function initTimerUI(): Promise<void> {
   stopBtnEl?.addEventListener('click', async (e) => {
     e.stopPropagation();
     try {
+      await invoke('exit_break_fullscreen');
+    } catch (_) {}
+    try {
       await invoke<boolean>('cancel_timer');
+      hideBreakTimeView();
       renderTimer(null);
     } catch (err) {
       console.error(err);
@@ -336,7 +394,11 @@ export async function initTimerUI(): Promise<void> {
     renderTimer(t);
   });
 
-  await listen('timer-stopped', () => {
+  await listen('timer-stopped', async () => {
+    try {
+      await invoke('exit_break_fullscreen');
+    } catch (_) {}
+    hideBreakTimeView();
     renderTimer(null);
   });
 
@@ -378,10 +440,19 @@ export async function initTimerUI(): Promise<void> {
     }, 3000);
   });
 
-  await listen('timer-phase-transition', (payload: unknown) => {
+  await listen('timer-phase-transition', async (payload: unknown) => {
     const p = payload as { id: number; is_work_phase: boolean; cycle_count: number; sound: string };
     if (p.is_work_phase) {
-      playTimerChime(p.sound || 'backtowork.wav');
+      if (!getHasPeeked()) {
+        await completeBreakStreak();
+      }
+      try {
+        await invoke('exit_break_fullscreen');
+      } catch (err) {
+        console.error('[Timer] Failed to exit break fullscreen:', err);
+      }
+      hideBreakTimeView();
+      playTimerChime(p.sound || 'backtowork.m4a');
       if (fullScreenAlertEnabled) {
         showFullScreenAlert(
           'Break Finished!',
@@ -391,14 +462,20 @@ export async function initTimerUI(): Promise<void> {
         );
       }
     } else {
-      playTimerChime(p.sound || 'workdone.wav');
-      if (fullScreenAlertEnabled) {
-        showFullScreenAlert(
-          'Work Complete!',
-          `Completed Work Cycle ${p.cycle_count}`,
-          'Start Break',
-          '☕'
-        );
+      resetPeekStatus();
+      playTimerChime(p.sound || 'workdone.m4a');
+      try {
+        await invoke('enter_break_fullscreen');
+      } catch (err) {
+        console.error('[Timer] Failed to enter break fullscreen:', err);
+      }
+      try {
+        const active = await invoke<Timer | null>('get_active_timer');
+        if (active) {
+          await showBreakTimeView(active);
+        }
+      } catch (err) {
+        console.error('[Timer] Failed to show break view on phase transition:', err);
       }
     }
   });
@@ -408,6 +485,10 @@ export async function initTimerUI(): Promise<void> {
     const active = await invoke<Timer | null>('get_active_timer');
     if (active) {
       renderTimer(active);
+      if (active.timer_type === 'Pomodoro' && !active.is_work_phase && !active.fired) {
+        await invoke('enter_break_fullscreen').catch(() => {});
+        await showBreakTimeView(active);
+      }
     } else {
       renderTimer(null);
     }

@@ -463,4 +463,93 @@ impl SqliteStore {
             .map_err(|e| e.to_string())
             .and_then(|r| r)
     }
+
+    /// Retrieves the current and best No-Peek streaks: `(current, best)`.
+    pub fn get_no_peek_streak(&self) -> Result<(u32, u32), StoreError> {
+        self.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT key, value FROM app_state WHERE key IN ('current_no_peek_streak', 'best_no_peek_streak')",
+            )?;
+            let mut current: u32 = 0;
+            let mut best: u32 = 0;
+            let mut rows = stmt.query([])?;
+            while let Some(row) = rows.next()? {
+                let k: String = row.get(0)?;
+                let v_str: String = row.get(1)?;
+                let val: u32 = serde_json::from_str(&v_str)
+                    .or_else(|_| v_str.parse::<u32>())
+                    .unwrap_or(0);
+                if k == "current_no_peek_streak" {
+                    current = val;
+                } else if k == "best_no_peek_streak" {
+                    best = val;
+                }
+            }
+            Ok((current, best))
+        })
+    }
+
+    /// Increments current streak by 1, updates best streak if exceeded, and returns `(current, best)`.
+    pub fn increment_no_peek_streak(&self) -> Result<(u32, u32), StoreError> {
+        self.with_conn(|conn| {
+            let (current, best) = {
+                let mut stmt = conn.prepare(
+                    "SELECT key, value FROM app_state WHERE key IN ('current_no_peek_streak', 'best_no_peek_streak')",
+                )?;
+                let mut current: u32 = 0;
+                let mut best: u32 = 0;
+                let mut rows = stmt.query([])?;
+                while let Some(row) = rows.next()? {
+                    let k: String = row.get(0)?;
+                    let v_str: String = row.get(1)?;
+                    let val: u32 = serde_json::from_str(&v_str)
+                        .or_else(|_| v_str.parse::<u32>())
+                        .unwrap_or(0);
+                    if k == "current_no_peek_streak" {
+                        current = val;
+                    } else if k == "best_no_peek_streak" {
+                        best = val;
+                    }
+                }
+                (current, best)
+            };
+            let next_current = current + 1;
+            let next_best = if next_current > best { next_current } else { best };
+            let curr_str = serde_json::to_string(&next_current).unwrap_or_else(|_| next_current.to_string());
+            let best_str = serde_json::to_string(&next_best).unwrap_or_else(|_| next_best.to_string());
+            conn.execute(
+                "INSERT INTO app_state (key, value) VALUES ('current_no_peek_streak', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+                rusqlite::params![&curr_str],
+            )?;
+            conn.execute(
+                "INSERT INTO app_state (key, value) VALUES ('best_no_peek_streak', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+                rusqlite::params![&best_str],
+            )?;
+            Ok((next_current, next_best))
+        })
+    }
+
+    /// Resets current streak to 0 while preserving best record, returning `(0, best)`.
+    pub fn reset_no_peek_streak(&self) -> Result<(u32, u32), StoreError> {
+        self.with_conn(|conn| {
+            let best = {
+                let mut stmt = conn.prepare("SELECT value FROM app_state WHERE key = 'best_no_peek_streak'")?;
+                let mut rows = stmt.query([])?;
+                if let Some(row) = rows.next()? {
+                    let v_str: String = row.get(0)?;
+                    serde_json::from_str(&v_str)
+                        .or_else(|_| v_str.parse::<u32>())
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            };
+            let curr_str = serde_json::to_string(&0).unwrap();
+            conn.execute(
+                "INSERT INTO app_state (key, value) VALUES ('current_no_peek_streak', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1",
+                rusqlite::params![&curr_str],
+            )?;
+            Ok((0, best))
+        })
+    }
 }

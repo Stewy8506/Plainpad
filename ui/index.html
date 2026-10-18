@@ -126,6 +126,39 @@
     </div>
   </div>
 
+  <!-- High-Fidelity Pomodoro Break Time View (BreakTimeView) -->
+  <div id="break-time-view" class="break-time-overlay break-time-view hidden" role="dialog" aria-modal="true" aria-labelledby="break-headline">
+    <div class="break-ambient-light"></div>
+    <div class="peek-banner hidden" id="peek-banner">
+      <span class="peek-banner-text">Peeking... Streak reset to 0</span>
+      <button id="peek-return-btn" class="peek-return-btn" type="button">Return to Break</button>
+    </div>
+    <div class="break-content-card">
+      <div class="break-graphic-container">
+        <svg class="break-orbit-svg" width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="48,16 80,72 16,72" stroke="#4ade80" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+          <ellipse cx="48" cy="48" rx="42" ry="18" transform="rotate(-28 48 48)" stroke="#4ade80" stroke-width="2.2" stroke-linecap="round" fill="none" />
+          <circle cx="48" cy="48" r="3.5" fill="#4ade80" />
+        </svg>
+      </div>
+      <h1 class="break-headline" id="break-headline">Break Time</h1>
+      <span class="break-category-badge" id="break-category-badge">WILDLIFE FACT-FILE</span>
+      <p class="break-fact-text" id="break-fact-text">Ostriches can run faster than horses.</p>
+      <span class="break-remaining-label">Break time remaining:</span>
+      <div class="break-digits-row">
+        <button id="break-pause-btn" class="break-pause-btn" type="button" title="Pause / Resume">⏸</button>
+        <span id="break-countdown-digits" class="break-countdown-digits">05:00</span>
+      </div>
+      <div class="break-actions-row">
+        <button id="break-sneak-btn" class="break-btn-pill" type="button">Sneak a peek</button>
+        <button id="break-end-btn" class="break-btn-pill" type="button">End Pomodoro</button>
+      </div>
+      <div class="break-streak-row">
+        No-Peek Streak: <span id="break-streak-current">0</span> (Best: <span id="break-streak-best">0</span>)
+      </div>
+    </div>
+  </div>
+
   <!-- The Void View Modal (#void-modal / #trash-modal) -->
   <div id="void-modal" class="void-modal hidden" role="dialog" aria-modal="true" aria-labelledby="void-modal-title">
     <div class="void-backdrop" id="void-modal-backdrop"></div>

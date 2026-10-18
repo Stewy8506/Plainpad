@@ -14,10 +14,20 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 
+#[derive(Debug, Clone)]
+pub struct WindowStateBackup {
+    pub x: i32,
+    pub y: i32,
+    pub width: f64,
+    pub height: f64,
+    pub is_always_on_top: bool,
+}
+
 struct AppState {
     store: Arc<plainpad_core::store::SqliteStore>,
     timers: plainpad_core::timers::TimerEngine,
     autopaste: Arc<plainpad_core::clipboard::AutoPasteEngine>,
+    window_backup: Option<WindowStateBackup>,
 }
 
 type AppStateLock = Mutex<AppState>;
@@ -587,6 +597,173 @@ fn list_timers(
     state: tauri::State<'_, Mutex<AppState>>,
 ) -> Vec<plainpad_core::timers::Timer> {
     state.lock().unwrap().timers.list()
+}
+
+#[tauri::command]
+fn get_no_peek_streak(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(u32, u32), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .get_no_peek_streak()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn increment_no_peek_streak(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(u32, u32), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .increment_no_peek_streak()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reset_no_peek_streak(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(u32, u32), String> {
+    state
+        .lock()
+        .unwrap()
+        .store
+        .reset_no_peek_streak()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_break_facts() -> Vec<plainpad_core::BreakFact> {
+    plainpad_core::get_break_facts()
+}
+
+#[tauri::command]
+fn record_peek_penalty(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(u32, u32), String> {
+    reset_no_peek_streak(state)
+}
+
+#[tauri::command]
+fn complete_break_streak(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(u32, u32), String> {
+    increment_no_peek_streak(state)
+}
+
+#[tauri::command]
+fn enter_break_fullscreen(
+    window: tauri::Window,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    let (stored_w, stored_h, stored_x, stored_y, stored_pinned) = {
+        let s = state.lock().unwrap();
+        let geo = s
+            .store
+            .get_setting("geometry")
+            .ok()
+            .flatten()
+            .unwrap_or(serde_json::json!({}));
+        let w = geo.get("width").and_then(|v| v.as_f64()).unwrap_or(420.0);
+        let h = geo.get("height").and_then(|v| v.as_f64()).unwrap_or(560.0);
+        let x = geo.get("x").and_then(|v| v.as_i64()).unwrap_or(100) as i32;
+        let y = geo.get("y").and_then(|v| v.as_i64()).unwrap_or(100) as i32;
+        let pinned = s
+            .store
+            .get_setting("always_on_top")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        (w, h, x, y, pinned)
+    };
+
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let (width, height) = if let Ok(sz) = window.inner_size() {
+        let log = sz.to_logical::<f64>(scale);
+        if log.width > 100.0 && log.height > 100.0 {
+            (log.width, log.height)
+        } else {
+            (stored_w, stored_h)
+        }
+    } else {
+        (stored_w, stored_h)
+    };
+
+    let (x, y) = if let Ok(pos) = window.outer_position() {
+        let log = pos.to_logical::<f64>(scale);
+        (log.x as i32, log.y as i32)
+    } else {
+        (stored_x, stored_y)
+    };
+
+    {
+        let mut s = state.lock().unwrap();
+        if s.window_backup.is_none() {
+            s.window_backup = Some(WindowStateBackup {
+                x,
+                y,
+                width,
+                height,
+                is_always_on_top: stored_pinned,
+            });
+        }
+    }
+
+    let _ = window.set_always_on_top(true);
+    window.set_fullscreen(true).map_err(|e| e.to_string())?;
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    Ok(())
+}
+
+#[tauri::command]
+fn exit_break_fullscreen(
+    window: tauri::Window,
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<(), String> {
+    window.set_fullscreen(false).map_err(|e| e.to_string())?;
+
+    let backup_opt = {
+        let mut s = state.lock().unwrap();
+        s.window_backup.take()
+    };
+
+    if let Some(backup) = backup_opt {
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(backup.width, backup.height)));
+        let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(backup.x as f64, backup.y as f64)));
+        let _ = window.set_always_on_top(backup.is_always_on_top);
+    } else {
+        let s = state.lock().unwrap();
+        let geo = s
+            .store
+            .get_setting("geometry")
+            .ok()
+            .flatten()
+            .unwrap_or(serde_json::json!({}));
+        let w = geo.get("width").and_then(|v| v.as_f64()).unwrap_or(420.0);
+        let h = geo.get("height").and_then(|v| v.as_f64()).unwrap_or(560.0);
+        let pinned = s
+            .store
+            .get_setting("always_on_top")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+        let _ = window.set_always_on_top(pinned);
+        if let (Some(x), Some(y)) = (geo.get("x").and_then(|v| v.as_f64()), geo.get("y").and_then(|v| v.as_f64())) {
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+        }
+    }
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    Ok(())
 }
 
 #[tauri::command]
@@ -1359,6 +1536,7 @@ fn main() {
             store,
             timers,
             autopaste: Arc::new(plainpad_core::clipboard::AutoPasteEngine::new()),
+            window_backup: None,
         }))
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -1751,6 +1929,14 @@ fn main() {
             fetch_ai_models,
             register_global_hotkey,
             play_sound,
+            get_no_peek_streak,
+            increment_no_peek_streak,
+            reset_no_peek_streak,
+            get_break_facts,
+            record_peek_penalty,
+            complete_break_streak,
+            enter_break_fullscreen,
+            exit_break_fullscreen,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Plainpad");
